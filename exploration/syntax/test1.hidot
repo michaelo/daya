@@ -1,0 +1,59 @@
+# Test with a quite dynamic approach
+
+# --------------------
+# Optional: Global definitions
+# --------------------
+
+layout {
+    width: 600px
+    height: 400px
+    background: white
+    foreground: black
+}
+
+# --------------------
+# Optional: Custom types
+# --------------------
+# TODO: Specify in syntax as part of type that it is only usable for eg. nodes vs edges?
+# TODO: Define syntax and naming strategy for including types
+# use TypeA, TypeB, TypeC from somecommonlibrary
+node Class {
+    label: Some label
+    shape: square
+}
+
+node Service {
+    label: Service
+    shape: circle
+}
+
+edge Inherits {
+    label: Extends
+    line: dotted
+    arrow: open
+}
+
+edge Consumes {
+    label: Consumes
+    line: solid
+    arrow: full
+}
+
+# --------------------
+# Optional: Declaring my nodes and assigning types
+# --------------------
+JsonFile:Class
+File:Class
+Api:Service
+
+# --------------------
+# Structure
+# --------------------
+JsonFile Inherits File
+Application Consumes Api
+Api > InnerImplementation
+
+# --------------------
+
+
+# You can use the types directly for edges, but can also specify it "anonymously" using the > operator (or go for ->?)
