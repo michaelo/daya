@@ -1,0 +1,51 @@
+# Two definition blocks:
+# Type defines whether it generates a block or a connection
+# <node|edge> <name> {
+#     key1:value1
+#     key2:value2
+#     key3:value3
+# }
+
+#Include, path relative to self
+@definitions.hidot
+
+node Module {
+    label: Module
+    shape: square
+}
+
+
+# Declarations:
+# <Name of instance>:<name>
+Cli:Module
+Help:Module
+Parser:Module
+Pretty:Module
+
+
+# Relationships
+# <nodetype> <edgetype> <nodetype>
+Cli Implements Help
+Cli DependsOn Parser
+Cli DependsOn Pretty
+
+
+# Containers
+# A 
+
+
+
+# TBD:
+# Shall a node-instance be allowed more than once in a given diagram?
+# How to import definitions?
+
+
+
+Tokens:
+"node": Node block start
+"edge": Edge block start
+"{": brace_start
+"}": brace_end
+"\"": quote
+":": colon
+"->": relates to
