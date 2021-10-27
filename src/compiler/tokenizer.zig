@@ -7,22 +7,37 @@ const ParseState = enum {
     String,
     Identifier,
     SingleLineComment,
-    // TODO: State for depends-arrow
+    Dash,
+    NumericLiteral,
+    NumericUnit,
+    Hash,
+    FSlash,
 };
 
-const TokenType = enum { Invalid, Eof, Nl, Keyword_Node, Keyword_Edge, Identifier, SingleLineComment, BraceStart, BraceEnd, QuoteStart, QuoteEnd, Colon, Arrow };
+const TokenType = enum {
+    Invalid,
+    Eof,
+    Nl,
+    Keyword_Node,
+    Keyword_Edge,
+    Identifier,
+    SingleLineComment,
+    BraceStart,
+    BraceEnd,
+    QuoteStart,
+    QuoteEnd,
+    Colon,
+    Arrow,
+    NumericLiteral,
+    NumericUnit,
+    HashColor
+    };
 
 const Token = struct {
     typ: TokenType,
     start: u64,
     end: u64,
-    // loc: Location,
 };
-
-// const Location = struct {
-//     start: u64,
-//     end: u64,
-// };
 
 const Tokenizer = struct {
     buf: []const u8,
@@ -50,8 +65,11 @@ const Tokenizer = struct {
             switch (state) {
                 .Start => {
                     switch (c) {
+                        '/' => {
+                            state = .FSlash;
+                        },
                         '#' => {
-                            state = .SingleLineComment;
+                            state = .Hash;
                         },
                         'a'...'z', 'A'...'Z' => {
                             state = .Identifier;
@@ -80,6 +98,9 @@ const Tokenizer = struct {
                             result.end = self.pos;
                             break;
                         },
+                        '0'...'9' => {
+                            state = .NumericLiteral;
+                        },
                         ' ', '\t' => {
                             result.start = self.pos + 1;
                         },
@@ -101,14 +122,55 @@ const Tokenizer = struct {
                         },
                     }
                 },
+                .FSlash => {
+                    switch(c) {
+                        '/' => state = .SingleLineComment,
+                        else => {
+                            // Currently unknown token
+                            break;
+                        }
+                    }
+                },
                 .SingleLineComment => {
                     // Spin until end of line
+                    // Currently ignoring comments
                     switch (c) {
                         '\n' => break,
                         else => {},
                     }
                 },
+                .Dash => {
+
+                },
+                .NumericLiteral => {
+                    switch(c) {
+                        '0'...'9' => {},
+                        // 'a'...'z' => state = .NumericUnit,
+                        else => {
+                            result.typ = .NumericLiteral;
+                            result.end = self.pos;
+                            break;
+                        }
+                    }
+                },
+                .NumericUnit => {
+                    // TODO: Await.
+                },
+                .Hash => {
+                    switch(c) {
+                        '0'...'9','a'...'f','A'...'F' => {},
+                        else => {
+                            result.typ = .HashColor;
+                            result.end = self.pos;
+                            break;
+                        }
+                    }
+                },
+
             }
+        } else {
+            // eof
+            result.end = self.pos;
         }
         return result;
     }
@@ -130,13 +192,14 @@ fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
     for (expected_tokens) |expected_token, i| {
         const found_token = tokenizer.nextToken();
         testing.expectEqual(expected_token, found_token.typ) catch |e| {
-            debug("Expected token[{d}] {s}, got {s} ({d}-{d}): '{s}'\n", .{ i, expected_token, found_token.typ, found_token.start, found_token.end, buf[found_token.start..found_token.end] });
+            debug("Expected token[{d}] {s}, got {s}:\n\n", .{ i, expected_token, found_token.typ });
+            debug("  ({d}-{d}): '{s}'\n", .{found_token.start, found_token.end, buf[found_token.start..found_token.end]});
             return e;
         };
     }
 }
 
-test "tokenize" {
+test "tokenize exploration" {
     var buf =
         \\node Module {
         \\  label: Module
@@ -146,6 +209,61 @@ test "tokenize" {
 
     // dumpTokens(buf);
     try expectTokens(buf, &[_]TokenType{ .Identifier, .Identifier, .BraceStart, .Nl, .Identifier, .Colon, .Identifier, .Nl, .BraceEnd, .Nl });
+}
+
+test "tokenize exploration 2" {
+    var buf =
+        \\layout {
+        \\    width: 600px
+        \\    height: 400px
+        \\    background: #fffffff
+        \\    foreground: #0000000
+        \\}
+        ;
+
+    // dumpTokens(buf);
+    try expectTokens(buf, &[_]TokenType{
+        // Layout {
+        .Identifier,
+        .BraceStart,
+        .Nl,
+        // width: 600px
+        .Identifier,
+        .Colon,
+        .NumericLiteral,
+        .Identifier, // .NumericUnit
+        .Nl,
+        // height: 400px
+        .Identifier,
+        .Colon,
+        .NumericLiteral,
+        .Identifier, // .NumericUnit
+        .Nl,
+        // background: #ffffff
+        .Identifier,
+        .Colon,
+        .HashColor,
+        .Nl,
+        // foreground: #ffffff
+        .Identifier,
+        .Colon,
+        .HashColor,
+        .Nl,
+        // }
+        .BraceEnd
+        });
+}
+
+const Ast = struct {
+
+};
+
+fn generateAst(buf: []const u8) void {
+     _ = buf;
+}
+
+fn AstToDot(ast: *Ast) void {
+    _ = ast;
 }
 
 // Sequence:

@@ -1,43 +1,56 @@
-# Two definition blocks:
-# Type defines whether it generates a block or a connection
-# <node|edge> <name> {
-#     key1:value1
-#     key2:value2
-#     key3:value3
-# }
+// Two definition blocks:
+// Type defines whether it generates a block or a connection
+// <node|edge> <name> {
+//     key1:value1
+//     key2:value2
+//     key3:value3
+// }
 
-#Include, path relative to self
-@definitions.hidot
+// Include, path relative to self
+// @definitions.hidot
 
+// Generic definitions
 node Module {
     label: Module
     shape: square
 }
 
+node Subsystem {
+    label: Subsystem
+    shape: roundedsquare
+} 
 
-# Declarations:
-# <Name of instance>:<name>
+
+// Declarations:
+// <Name of instance>:<name>
 Cli:Module
 Help:Module
 Parser:Module
 Pretty:Module
 
+// Containers - will render inner components inside the outer
+Frontend: Subsystem {
+    Cli
+    Help
+}
 
-# Relationships
-# <nodetype> <edgetype> <nodetype>
+Backend: Subsystem {
+    Parser
+    Pretty
+}
+
+
+// Relationships
+// <nodetype> <edgetype> <nodetype>
 Cli Implements Help
 Cli DependsOn Parser
 Cli DependsOn Pretty
 
 
-# Containers
-# A 
 
-
-
-# TBD:
-# Shall a node-instance be allowed more than once in a given diagram?
-# How to import definitions?
+// TBD:
+// Shall a node-instance be allowed more than once in a given diagram?
+// How to import definitions?
 
 
 
