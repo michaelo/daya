@@ -74,6 +74,9 @@ const Tokenizer = struct {
                         'a'...'z', 'A'...'Z' => {
                             state = .Identifier;
                         },
+                        '0'...'9' => {
+                            state = .NumericLiteral;
+                        },
                         '{' => {
                             result.typ = .BraceStart;
                             self.pos += 1;
@@ -92,15 +95,14 @@ const Tokenizer = struct {
                             result.end = self.pos;
                             break;
                         },
+                        // TBD: Any semantic use for newlines, or simply treat it like any space?
                         '\n' => {
                             result.typ = .Nl;
                             self.pos += 1;
                             result.end = self.pos;
                             break;
                         },
-                        '0'...'9' => {
-                            state = .NumericLiteral;
-                        },
+                        // Whitespace are separators
                         ' ', '\t' => {
                             result.start = self.pos + 1;
                         },
