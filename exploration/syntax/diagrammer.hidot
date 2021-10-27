@@ -1,0 +1,13 @@
+node Module {
+    label: "Module"
+    shape: square
+}
+
+edge Uses {
+    label: "Uses"
+}
+
+Tokenizer: Module
+Parser: Module
+
+Parser Uses Tokenizer
