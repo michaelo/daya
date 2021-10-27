@@ -31,6 +31,7 @@ const TokenType = enum {
     NumericLiteral,
     NumericUnit,
     HashColor,
+    String,
 };
 
 const Token = struct {
@@ -91,6 +92,10 @@ const Tokenizer = struct {
                         '0'...'9' => {
                             state = .NumericLiteral;
                         },
+                        '"' => {
+                            state = .String;
+                            result.start = self.pos+1;
+                        },
                         '{' => {
                             result.typ = .BraceStart;
                             self.pos += 1;
@@ -126,7 +131,17 @@ const Tokenizer = struct {
                         },
                     }
                 },
-                .String => {},
+                .String => {
+                    switch (c) {
+                        '"' => {
+                            result.end = self.pos;
+                            result.typ = .String;
+                            self.pos += 1;
+                            break;
+                        },
+                        else => {},
+                    }
+                },
                 .Identifier => {
                     switch (c) {
                         'a'...'z', 'A'...'Z', '0'...'9' => {},
@@ -525,6 +540,7 @@ fn difToDot(dif: *Dif, out_buf: []u8) !usize {
 fn hidotToDot(buf: []const u8, out_buf: []u8) !usize {
     var tokens_buf = initBoundedArray(Token, 1024);
     try tokens_buf.resize(try tokenize(buf, tokens_buf.unusedCapacitySlice()));
+    // dumpTokens(buf);
     var dif = Dif{};
     try tokensToDif(tokens_buf.slice(), &dif);
     return try difToDot(&dif, out_buf);
