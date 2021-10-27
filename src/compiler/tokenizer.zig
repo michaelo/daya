@@ -4,11 +4,11 @@ const debug = std.debug.print;
 const assert = std.debug.assert;
 
 fn keywordOrIdentifier(value: []const u8) TokenType {
-    if(std.mem.eql(u8, value, "node")) {
+    if (std.mem.eql(u8, value, "node")) {
         return TokenType.Keyword_Node;
-    } else if(std.mem.eql(u8, value, "edge")) {
+    } else if (std.mem.eql(u8, value, "edge")) {
         return TokenType.Keyword_Edge;
-    } else if(std.mem.eql(u8, value, "layout")) {
+    } else if (std.mem.eql(u8, value, "layout")) {
         return TokenType.Keyword_Layout;
     }
 
@@ -26,14 +26,12 @@ const TokenType = enum {
     SingleLineComment,
     BraceStart,
     BraceEnd,
-    QuoteStart, // necessary? we only want the inner string anyway
-    QuoteEnd, // necessary? we only want the inner string anyway
     Colon,
     Arrow,
     NumericLiteral,
     NumericUnit,
-    HashColor
-    };
+    HashColor,
+};
 
 const Token = struct {
     typ: TokenType,
@@ -141,12 +139,12 @@ const Tokenizer = struct {
                     }
                 },
                 .FSlash => {
-                    switch(c) {
+                    switch (c) {
                         '/' => state = .SingleLineComment,
                         else => {
                             // Currently unknown token
                             break;
-                        }
+                        },
                     }
                 },
                 .SingleLineComment => {
@@ -157,34 +155,31 @@ const Tokenizer = struct {
                         else => {},
                     }
                 },
-                .Dash => {
-
-                },
+                .Dash => {},
                 .NumericLiteral => {
-                    switch(c) {
+                    switch (c) {
                         '0'...'9' => {},
                         // 'a'...'z' => state = .NumericUnit,
                         else => {
                             result.typ = .NumericLiteral;
                             result.end = self.pos;
                             break;
-                        }
+                        },
                     }
                 },
                 .NumericUnit => {
                     // TODO: Await.
                 },
                 .Hash => {
-                    switch(c) {
-                        '0'...'9','a'...'f','A'...'F' => {},
+                    switch (c) {
+                        '0'...'9', 'a'...'f', 'A'...'F' => {},
                         else => {
                             result.typ = .HashColor;
                             result.end = self.pos;
                             break;
-                        }
+                        },
                     }
                 },
-
             }
         } else {
             // eof
@@ -212,7 +207,7 @@ fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
         const found_token = tokenizer.nextToken();
         testing.expectEqual(expected_token, found_token.typ) catch |e| {
             debug("Expected token[{d}] {s}, got {s}:\n\n", .{ i, expected_token, found_token.typ });
-            debug("  ({d}-{d}): '{s}'\n", .{found_token.start, found_token.end, buf[found_token.start..found_token.end]});
+            debug("  ({d}-{d}): '{s}'\n", .{ found_token.start, found_token.end, buf[found_token.start..found_token.end] });
             return e;
         };
     }
@@ -248,7 +243,7 @@ test "tokenize exploration 2" {
         \\    background: #fffffff
         \\    foreground: #0000000
         \\}
-        ;
+    ;
 
     // dumpTokens(buf);
     try expectTokens(buf, &[_]TokenType{
@@ -279,8 +274,8 @@ test "tokenize exploration 2" {
         .HashColor,
         .Nl,
         // }
-        .BraceEnd
-        });
+        .BraceEnd,
+    });
 }
 
 // General strategy
@@ -292,45 +287,90 @@ const NodeShape = enum {
     Circle,
 };
 
-const EdgeStyle = enum {
-    Solid,
-    Dotted,
-    Dashed
+const EdgeStyle = enum { Solid, Dotted, Dashed };
+
+const EdgeEndStyle = enum { None, OpenArrow, SolidArrow };
+
+const Color = struct {
+    r: f16,
+    g: f16,
+    b: f16,
+    a: f16,
+
+    fn hexToFloat(color: []const u8) f16 {
+        assert(color.len == 2);
+        var buf: [1]u8 = undefined;
+        _ = std.fmt.hexToBytes(buf[0..], color) catch 0;
+        return @intToFloat(f16, buf[0])/255;
+    }
+
+    pub fn fromHexString(color: []const u8) Color {
+        assert(color.len == 7 or color.len == 9);
+        // const
+        if (color.len == 7) {
+            return .{
+                .r = hexToFloat(color[1..3]),
+                .g = hexToFloat(color[3..5]),
+                .b = hexToFloat(color[5..7]),
+                .a = 1.0,
+            };
+        } else {
+            return .{
+                .r = hexToFloat(color[1..3]),
+                .g = hexToFloat(color[3..5]),
+                .b = hexToFloat(color[5..7]),
+                .a = hexToFloat(color[7..9]),
+            };
+        }
+    }
 };
 
-const EdgeEndStyle = enum {
-    None,
-    OpenArrow,
-    SolidArrow
-};
+test "Color.fromHexString" {
+    var c1 = Color.fromHexString("#FFFFFF");
+    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.r, 0.01);
+    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.g, 0.01);
+    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.b, 0.01);
+    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.a, 0.01);
+
+    var c2 = Color.fromHexString("#006699FF");
+    try testing.expectApproxEqAbs(@as(f16, 0.0), c2.r, 0.01);
+    try testing.expectApproxEqAbs(@as(f16, 0.4), c2.g, 0.01);
+    try testing.expectApproxEqAbs(@as(f16, 0.6), c2.b, 0.01);
+    try testing.expectApproxEqAbs(@as(f16, 1.0), c2.a, 0.01);
+}
 
 const NodeDefinition = struct {
-    label: []const u8,
-    shape: NodeShape,
+    name: []const u8,
+    label: []const u8 = undefined,
+    shape: NodeShape = .Square,
     // TODO: Add more style-stuff
+    bg_color: ?Color = null,
+    fg_color: ?Color = null,
 };
 
 const EdgeDefinition = struct {
-    label: []const u8,
-    edgeStyle: EdgeStyle,
-    sourceSymbol: EdgeEndStyle,
-    sourceLabel: []const u8,
-    targetSymbol: EdgeEndStyle,
-    targetLabel: []const u8,
+    name: []const u8,
+    label: ?[]const u8 = null,
+    edgeStyle: EdgeStyle = EdgeStyle.Solid,
+    sourceSymbol: EdgeEndStyle = EdgeEndStyle.None,
+    sourceLabel: ?[]const u8 = null,
+    targetSymbol: EdgeEndStyle = EdgeEndStyle.None,
+    targetLabel: ?[]const u8 = null,
 };
 
 const Relationship = struct {
     // TBD: This is currently pointers, but could just as well be idx to the respective arrays. Benchmark later on.
     source: *NodeInstance, // Necessary? Or simple store them at the source-NodeInstance and point out?
     target: *NodeInstance,
-    edge: *EdgeDefinition
+    edge: *EdgeDefinition,
 };
 
 const NodeInstance = struct {
     type: *NodeDefinition,
+    name: []const u8,
+    label: ?[]const u8 = null,
     relationships: [64]Relationship,
 };
-
 
 /// Diagrammer Internal Format / Representation
 const Dif = struct {
@@ -346,122 +386,139 @@ const Dif = struct {
 fn tokenize(buf: []const u8, tokens_out: []Token) !usize {
     var tokenizer = Tokenizer.init(buf);
     var tok_idx: usize = 0;
-    while (tok_idx<buf.len) {
+    while (tok_idx < buf.len) {
         const token = tokenizer.nextToken();
         tokens_out[tok_idx] = token;
         tok_idx += 1;
 
         if (token.typ == .Eof) break;
-    } else if(tok_idx == buf.len) {
+    } else if (tok_idx == buf.len) {
         return error.Overflow;
     }
     return tok_idx;
 }
 
-// Parse strategy: 
+// Parse strategy:
 // Can create a variant of the tokanizer, but working on the tokens. Then have a struct/union based on a Type-enum (Definition (node, edge), Instantiation (MyObj: SomeNode), Property (key:value), Relation (<nodeinstance> <edgetype> <nodeinstance>)
 // Can be run nested as well?
+
 
 /// Take the tokenized input and parse/convert it to the internal format
 /// We don't need/use a full AST (in the PL-form), but we need to parse to an internal format we can work with
 
+/// Get the following complete block of tokens as identified by braces. Assumes first entry is a BraceStart
+fn getBlock(
+    tokens: []const Token,
+) ![]const Token {
+    var brace_depth: usize = 0;
+    return for (tokens) |token, i| {
+        switch (token.typ) {
+            .BraceStart => brace_depth += 1,
+            .BraceEnd => brace_depth -= 1,
+            else => {},
+        }
+        // debug("  now at: {d} {d}\n",.{idx, i});
+        if (brace_depth == 0) break tokens[0..i];
+    } else {
+        // Found no matching BraceEnd?
+        debug("ERROR: No closing brace found\n", .{});
+        return error.MissingClosingBrace;
+    };
+}
 
-const DifParser = struct {
-    const State = enum {
-        Start,
-        String,
-        Identifier,
-        SingleLineComment,
-        Dash,
-        NumericLiteral,
-        NumericUnit,
-        Hash,
-        FSlash,
+fn parseNodeDefinition(name: []const u8, tokens: []const Token) !NodeDefinition {
+    var result = NodeDefinition{
+        .name = name,
     };
 
-    tokens: []const Token,
-    pos: u64 = 0,
-
-    fn init(tokens: []const Token) DifParser {
-        return DifParser{
-            .tokens = tokens,
-        };
+    // TODO: Iterate over tokens to find properties
+    // now: label, shape
+    // later: bgcolor, fgcolor, border, ...
+    var idx: usize = 0;
+    while (idx < tokens.len) : (idx += 1) {
+        // Assume identifier, colon, then some kind of value
+        const token = tokens[idx];
+        _ = token;
     }
+    return result;
+}
 
-    fn nextToken(self: *Tokenizer) Token {
-        // var result = Token{
-        //     .typ = .Eof,
-        //     .start = self.pos,
-        //     .end = undefined,
-        //     .slice = undefined,
-        // };
+fn parseEdgeDefinition(name: []const u8, tokens: []const Token) !EdgeDefinition {
+    var result = EdgeDefinition{
+        .name = name,
+    };
 
-        var state: State = .Start;
-        _ = state;
-        var idx: usize = 0;
-        while(idx < self.tokens.len) : (idx += 1) {
-            const token = self.tokens[idx];
-            switch(token.typ) {
-                .Eof => {
-                    debug("End of file\n", .{});
-                },
-                .Keyword_Node => {
-                    debug("Found node: {s}\n", .{self.tokens[idx+1].slice});
-                    idx+=1;
-                    assert(self.tokens[idx].typ == .BraceStart);
-                    // while()
-                    // TODO: Parse following chunk.
-
-                },
-                else => {}
-            }
-        }
+    // TODO: Iterate over tokens to find properties
+    // label, sourceArrow, endArrow...
+    var idx: usize = 0;
+    while (idx < tokens.len) : (idx += 1) {
+        const token = tokens[idx];
+        _ = token;
     }
-};
+    return result;
+}
 
-fn tokensToDif(tokens: []Token, out_dif: *Dif) void {
-     _ = tokens;
-     _ = out_dif;
+fn tokensToDif(tokens: []const Token, out_dif: *Dif) !void {
+    _ = tokens;
+    _ = out_dif;
     // Find all 'node'-blocks and add to out_dif.nodeDefinitions
     // Find all 'edge'-blocks and add to out_dif.edgeDefinitions
     // Find all node-instances (entries in top-level matching <identifier><colon><identifier>) and add to nodeinstances
     // Find all entries matching format: <identifier> <identifier> <identifier> <nl> where first and last identifier is nodeInstance, and the middle is edgeInstance
-    var idx: usize = 0; 
-    while(idx < tokens.len) : (idx += 1) {
+    var idx: usize = 0;
+    while (idx < tokens.len) : (idx += 1) {
         const token = tokens[idx];
-        switch(token.typ) {
+        switch (token.typ) {
             .Eof => {
                 debug("End of file\n", .{});
             },
             .Keyword_Node => {
-                debug("Found node: {s}\n", .{tokens[idx+1].slice});
-                idx+=1;
-                assert(tokens[idx+1].typ == .BraceStart);
-                // while()
-                // TODO: Parse following chunk.
+                debug("Found node: {s}\n", .{tokens[idx + 1].slice});
+                idx += 1; // Get to the name
+                const node_name = tokens[idx].slice;
+                idx += 1; // Get to the {
+                assert(tokens[idx].typ == .BraceStart); // TODO: better error
+                const block = try getBlock(tokens[idx..]);
+                debug("Got block: len:{d}\n", .{block.len});
+                try out_dif.nodeDefinitions.append(try parseNodeDefinition(node_name, block));
+                idx += block.len;
             },
             .Keyword_Edge => {
-                debug("Found edge: {s}\n", .{tokens[idx+1].slice});
-                idx+=1;
-                assert(tokens[idx+1].typ == .BraceStart);
-                // while()
-                // TODO: Parse following chunk.
+                debug("Found edge: {s}\n", .{tokens[idx + 1].slice});
+                idx += 1;
+                const edge_name = tokens[idx].slice;
+                idx += 1; // Get to the {
+                assert(tokens[idx].typ == .BraceStart); // TODO: better error
+                const block = try getBlock(tokens[idx..]);
+                debug("Got block: len:{d}\n", .{block.len});
+                try out_dif.edgeDefinitions.append(try parseEdgeDefinition(edge_name, block));
+                idx += block.len;
             },
-            else => {}
+            else => {},
         }
     }
 
-
     // Naive strategy: separate pass for each step
     // Optimized strategy: parse as we go, and lazily fill up if something's out of order. Can start with requirement that defs must be top-down for simplicity, but it also enforces readability
-
 }
 
 /// Take the Dif and convert it to well-defined DOT. Returns size of dot-buffer
 fn difToDot(dif: *Dif, out_buf: []u8) !usize {
-    _ = dif;
-    _ = out_buf;
-    return (try std.fmt.bufPrint(out_buf, "data here", .{})).len;    
+    // TODO: Replace with proper dot-definitions
+    var len: usize = 0;
+    for(dif.nodeDefinitions.slice()) |el| {
+        len += (try std.fmt.bufPrint(out_buf[len..], "nodeDefinition: {s} - {s}\n", .{el.name, el.shape})).len;
+    }
+
+    for(dif.edgeDefinitions.slice()) |el| {
+        len += (try std.fmt.bufPrint(out_buf[len..], "edgeDefinition: {s} - {s}\n", .{el.name, el.edgeStyle})).len;
+    }
+
+    for(dif.nodeInstance.slice()) |el| {
+        len += (try std.fmt.bufPrint(out_buf[len..], "nodeInstance: {s}\n", .{el.name})).len;
+    }
+
+    return len;
 }
 
 /// Full process from input-buffer of hidot-format to ouput-buffer of dot-format
@@ -469,14 +526,14 @@ fn hidotToDot(buf: []const u8, out_buf: []u8) !usize {
     var tokens_buf = initBoundedArray(Token, 1024);
     try tokens_buf.resize(try tokenize(buf, tokens_buf.unusedCapacitySlice()));
     var dif = Dif{};
-    tokensToDif(tokens_buf.slice(), &dif);
+    try tokensToDif(tokens_buf.slice(), &dif);
     return try difToDot(&dif, out_buf);
 }
 
 fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const u8) !void {
     // Allocate sufficiently big input and output buffers (1MB to begin with)
-    var input_buffer = initBoundedArray(u8, 1024*1024);
-    var output_buffer = initBoundedArray(u8, 1024*1024);
+    var input_buffer = initBoundedArray(u8, 1024 * 1024);
+    var output_buffer = initBoundedArray(u8, 1024 * 1024);
     // Open path_hidot_input and read to input-buffer
     try input_buffer.resize(try readFile(std.fs.cwd(), path_hidot_input, input_buffer.unusedCapacitySlice()));
     // debug("input: {s}\n", .{input_buffer.slice()});
@@ -488,7 +545,7 @@ fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const u8)
 }
 
 test "dummy" {
-    debug("sizeOf(Dif): {d}kb\n", .{@divFloor(@sizeOf(Dif), 1024)});    
+    debug("sizeOf(Dif): {d}kb\n", .{@divFloor(@sizeOf(Dif), 1024)});
 }
 
 test "full cycle" {
