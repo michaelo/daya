@@ -1,11 +1,31 @@
+node Default {
+    label: "all defaults here"
+}
+
 node Module {
-    label: "Module"
-    shape: square
+    label: "node: Module"
+    shape: circle
+    color: #000000
+    background: #ffffff;
 }
 
 edge Uses {
-    label: "Uses"
+    label: "edge: Uses"
+    style: solid
 }
+
+edge DependsOn {
+    label: "Depends on"
+    style: dashed
+    targetSymbol: arrow_open
+}
+
+edge OwnedBy {
+    label: "Owned by"
+    style: dashed
+    sourceSymbol: arrow_closed
+}
+
 
 Tokenizer: Module
 Parser: Module
