@@ -2,32 +2,87 @@ node Default {
     label: "all defaults here"
 }
 
-node Module {
-    label: "node: Module"
-    shape: circle
+node Interface {
+    label: "[Interface]"
+    shape: diamond
     color: #000000
     background: #ffffff;
 }
 
-edge Uses {
-    label: "edge: Uses"
+
+node Module {
+    label: "[Module]"
+    shape: box
+    color: #000000
+    background: #ffffff;
+}
+
+node Data {
+    shape: cylinder
+    color: #000000
+    background: #ffffff;
+}
+
+node Actor {
+    label: "[Actor]"
+    shape: polygon
+    color: #000000
+    background: #ffffff;
+}
+
+node ExternalDependency {
+    label: "[External Dep]"
+    shape: ellipse
+}
+
+// TODO: Allow edges to specify valid source/target-node types? I'd say yes
+
+edge NoLabel {
+    label: "Nolabel"
     style: solid
 }
 
-edge DependsOn {
-    label: "Depends on"
-    style: dashed
+edge uses {
+    label: "Uses"
+    style: solid
     targetSymbol: arrow_open
 }
 
-edge OwnedBy {
+edge depends_on {
+    label: "Depends on"
+    style: solid
+    targetSymbol: arrow_open
+}
+
+edge is_owned_by {
     label: "Owned by"
     style: dashed
     sourceSymbol: arrow_closed
 }
 
+edge knows_about {
+    label: "Knows about",
+    style: dashed
+}
 
+
+// Units
+User: Actor
+HidotFile: Data
+Cli: Interface
 Tokenizer: Module
-Parser: Module
+Dif: Module
+DotWriter: Module
+Dot: ExternalDependency
 
-Parser Uses Tokenizer
+
+// Relationships
+User uses Cli
+HidotFile is_owned_by User
+Cli depends_on Tokenizer 
+Cli depends_on Dif 
+Cli depends_on DotWriter
+Cli depends_on Dot
+DotWriter knows_about Dot
+Dif depends_on Tokenizer
+
