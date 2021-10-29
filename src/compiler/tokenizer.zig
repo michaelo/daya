@@ -310,11 +310,12 @@ const NodeShape = enum {
     square,
     circle,
 
-    pub fn fromString(name: []const u8) NodeShape {
-        if(std.mem.eql(u8, name, "square")) return .square;
-        if(std.mem.eql(u8, name, "circle")) return .circle;
+    pub fn fromString(name: []const u8) !NodeShape {
+        return std.meta.stringToEnum(NodeShape, name)  orelse error.InvalidValue;
+        // if(std.mem.eql(u8, name, "square")) return .square;
+        // if(std.mem.eql(u8, name, "circle")) return .circle;
 
-        return .square; // default
+        // return .square; // default
     }
 };
 
@@ -323,12 +324,14 @@ const EdgeStyle = enum {
     dotted,
     dashed,
 
-    pub fn fromString(name: []const u8) EdgeStyle {
-        if(std.mem.eql(u8, name, "solid")) return .solid;
-        if(std.mem.eql(u8, name, "dotted")) return .dotted;
-        if(std.mem.eql(u8, name, "dashed")) return .dashed;
+    pub fn fromString(name: []const u8) !EdgeStyle {
+        return std.meta.stringToEnum(EdgeStyle, name) orelse error.InvalidValue;
 
-        return .solid; // default
+        // if(std.mem.eql(u8, name, "solid")) return .solid;
+        // if(std.mem.eql(u8, name, "dotted")) return .dotted;
+        // if(std.mem.eql(u8, name, "dashed")) return .dashed;
+
+        // return .solid; // default
     }
 };
 
@@ -337,12 +340,14 @@ const EdgeEndStyle = enum {
     arrow_open,
     arrow_closed,
 
-    pub fn fromString(name: []const u8) EdgeEndStyle {
-        if(std.mem.eql(u8, name, "none")) return .none;
-        if(std.mem.eql(u8, name, "arrow_open")) return .arrow_open;
-        if(std.mem.eql(u8, name, "arrow_closed")) return .arrow_closed;
+    pub fn fromString(name: []const u8) !EdgeEndStyle {
+        return std.meta.stringToEnum(EdgeEndStyle, name) orelse error.InvalidValue;
 
-        return .none; // default
+        // if(std.mem.eql(u8, name, "none")) return .none;
+        // if(std.mem.eql(u8, name, "arrow_open")) return .arrow_open;
+        // if(std.mem.eql(u8, name, "arrow_closed")) return .arrow_closed;
+
+        // return .none; // default
     }
 
 };
@@ -519,7 +524,7 @@ fn parseNodeDefinition(name: []const u8, tokens: []const Token) !NodeDefinition 
         if(std.mem.eql(u8, token.slice, "label")) {
             result.label = parseLabel(tokens[idx..idx+3]);
         } else if(std.mem.eql(u8, token.slice, "shape")) {
-            result.shape = parseNodeShape(tokens[idx..idx+3]);
+            result.shape = try parseNodeShape(tokens[idx..idx+3]);
         } else if(std.mem.eql(u8, token.slice, "color")) {
             result.fg_color = parseColor(tokens[idx..idx+3]);
         } else if(std.mem.eql(u8, token.slice, "background")) {
@@ -529,25 +534,25 @@ fn parseNodeDefinition(name: []const u8, tokens: []const Token) !NodeDefinition 
     return result;
 }
 
-fn parseNodeShape(tokens: []const Token) NodeShape {
+fn parseNodeShape(tokens: []const Token) !NodeShape {
     assert(tokens.len > 2);
     assert(tokens[1].typ == .colon);
     assert(tokens[2].typ == .identifier);
-    return NodeShape.fromString(tokens[2].slice);
+    return try NodeShape.fromString(tokens[2].slice);
 }
 
-fn parseEdgeStyle(tokens: []const Token) EdgeStyle {
+fn parseEdgeStyle(tokens: []const Token) !EdgeStyle {
     assert(tokens.len > 2);
     assert(tokens[1].typ == .colon);
     assert(tokens[2].typ == .identifier);
-    return EdgeStyle.fromString(tokens[2].slice);
+    return try EdgeStyle.fromString(tokens[2].slice);
 }
 
-fn parseEdgeEdgeEndStyle(tokens: []const Token) EdgeEndStyle {
+fn parseEdgeEdgeEndStyle(tokens: []const Token) !EdgeEndStyle {
     assert(tokens.len > 2);
     assert(tokens[1].typ == .colon);
     assert(tokens[2].typ == .identifier);
-    return EdgeEndStyle.fromString(tokens[2].slice);
+    return try EdgeEndStyle.fromString(tokens[2].slice);
 }
 
 
@@ -567,14 +572,14 @@ fn parseEdgeDefinition(name: []const u8, tokens: []const Token) !EdgeDefinition 
             result.label = parseLabel(tokens[idx..idx+3]);
             idx += 3;
         } else if(std.mem.eql(u8, token.slice, "style")) {
-            result.edge_style = parseEdgeStyle(tokens[idx..idx+3]);
+            result.edge_style = try parseEdgeStyle(tokens[idx..idx+3]);
             idx += 3;
         } else if(std.mem.eql(u8, token.slice, "targetSymbol")) {
             // debug("parsing targetSymbol\n", .{});
-            result.target_symbol = parseEdgeEdgeEndStyle(tokens[idx..idx+3]);
+            result.target_symbol = try parseEdgeEdgeEndStyle(tokens[idx..idx+3]);
             idx += 3;
         } else if(std.mem.eql(u8, token.slice, "sourceSymbol")) {
-            result.source_symbol = parseEdgeEdgeEndStyle(tokens[idx..idx+3]);
+            result.source_symbol = try parseEdgeEdgeEndStyle(tokens[idx..idx+3]);
             idx += 3;
         }
     }
