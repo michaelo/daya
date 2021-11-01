@@ -293,7 +293,7 @@ pub fn tokensToDif(tokens: []const Token, out_dif: *Dif) !void {
         const token = tokens[idx];
         switch (token.typ) {
             .eof => {
-                debug("End of file\n", .{});
+                // debug("End of file\n", .{});
             },
             .keyword_node => {
                 // debug("Found node: {s}\n", .{tokens[idx + 1].slice});
@@ -318,7 +318,7 @@ pub fn tokensToDif(tokens: []const Token, out_dif: *Dif) !void {
             .nl => {
                 // debug("Testing sequence: {s} {s} {s} {s} {s}\n", .{tokens[idx].typ, tokens[idx+1].typ, tokens[idx+2].typ, tokens[idx+3].typ, tokens[idx+4].typ});
                 if(testForSequence(tokens[idx..], &[_]TokenType{.nl, .identifier, .colon, .identifier, .nl})) {
-                    debug("Found sequence\n", .{});
+                    // debug("Found sequence\n", .{});
                     const nodeId = tokens[idx+1].slice;
                     const nodeDefinitionId = tokens[idx+3].slice;
 
@@ -343,7 +343,7 @@ pub fn tokensToDif(tokens: []const Token, out_dif: *Dif) !void {
                     // Proceed
                     idx += 2;
                 } else if (testForSequence(tokens[idx..], &[_]TokenType{.nl, .identifier, .identifier, .identifier, .nl})) {
-                    debug("Found relationship\n", .{});
+                    // debug("Found relationship\n", .{});
                     const srcNode = for(out_dif.nodeInstance.slice()) |*item| {
                         if(std.mem.eql(u8, item.name, tokens[idx+1].slice)) {
                             break item;
