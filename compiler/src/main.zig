@@ -13,6 +13,13 @@ pub const APP_VERSION = blk: {
     }
 };
 
+const errors = error {
+    ParseError,
+    CouldNotReadInputFile,
+    CouldNotReadOutputFile,
+    ProcessError
+};
+
 
 const OutputFormat = enum {
     dot,
@@ -72,17 +79,23 @@ fn argHasValue(arg: []const u8, full: []const u8, short: ?[]const u8) ?[]const u
     } else return null;
 }
 
-fn parseArgs(args: [][]const u8) !AppArgs {
-    var result = AppArgs{
-        .input_file = undefined,
-        .output_file = undefined,
-    };
+fn getLowercaseFileext(file: []const u8, scrap: []u8) ![]u8 {
+    var last_dot = std.mem.lastIndexOf(u8, file, ".") orelse return error.NoDot;
+    return std.ascii.lowerString(scrap, file[last_dot+1..]);
+}
 
+fn parseArgs(args: [][]const u8) !AppArgs {
     if(args.len < 1) {
         debug("ERROR: No arguments provided\n", .{});
         printHelp(false);
         return error.NoArguments;
     }
+
+    var scrap: [64]u8 = undefined;
+
+    var input_file: ?[]const u8 = null;
+    var output_file: ?[]const u8 = null;
+    var output_format: ?OutputFormat = null;
 
     for (args) |arg| {
         // Flags
@@ -101,9 +114,51 @@ fn parseArgs(args: [][]const u8) !AppArgs {
             printHelp(false);
             return error.InvalidArgument;
         }
+
+        
+        // Check for input file
+        var ext = getLowercaseFileext(arg, scrap[0..]) catch {
+            debug("WARNING: Could not read file-extension of argument '{s}' (ignoring)\n", .{arg});
+            continue;
+        };
+
+        if(std.mem.eql(u8, ext, "hidot")) {
+            input_file = arg[0..];
+            continue;
+        }
+
+        // Check for valid output-file
+        if(std.meta.stringToEnum(OutputFormat, ext)) |format| {
+            output_file = arg[0..];
+            output_format = format;
+            continue;
+        }
+
+        debug("WARNING: Unhandled argument: '{s}'\n", .{arg});
     }
 
-    return result;
+    // Validate parsed args
+    if(input_file == null) {
+        debug("ERROR: Missing input file\n", .{});
+        return error.NoInputFile;
+    }
+
+    if(output_file == null) {
+        debug("ERROR: Missing output file\n", .{});
+        return error.NoOutputFile;
+    }
+
+    if(output_format == null) {
+        debug("ERROR: Unknown output format\n", .{});
+        return error.NoOutputFormat;
+    }
+
+    // Donaroo
+    return AppArgs{
+        .input_file = input_file.?,
+        .output_file = output_file.?,
+        .output_format = output_format.?,
+    };
 }
 
 pub fn main() !void {
@@ -115,8 +170,22 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(aa);
     defer std.process.argsFree(aa, args);
 
-    _ = parseArgs(args[1..]) catch {
+    var parsedArgs = parseArgs(args[1..]) catch {
+        debug("Unable to continue. Exiting.\n", .{});
+        return;
+    };
 
+
+    do(&parsedArgs) catch |e| switch(e) {
+        errors.CouldNotReadInputFile => {
+            debug("Could not read input-file: {s}\n", .{parsedArgs.input_file});
+        },
+        errors.CouldNotReadOutputFile => {
+            debug("Could not read output-file: {s}\n", .{parsedArgs.output_file});
+        },
+        else => {
+            debug("DEBUG: Unhandled error: {s}\n", .{e});
+        }
     };
     // debug("Got hidot: {s}\nGot ibhidot: {s}\n", .{APP_VERSION, hidot.LIB_VERSION});
     // Arguments:
@@ -130,3 +199,94 @@ pub fn main() !void {
     //   Call lib, with output-writer
     //
 }
+
+pub fn do(args: *AppArgs) errors!void {
+    // v0.1.0:
+    // Generate a .dot anyway: tmp.dot
+    //   Att! This makes it not possible to run in parallal for now
+    // var scrap: [1024]u8 = undefined;
+    // var output_tmp_dot = std.fmt.bufPrint(scrap, "{s}", .{});
+    try hidotFileToDotFile(args.input_file, "tmp.dot");
+    defer {
+        std.fs.cwd().deleteFile("tmp.dot") catch unreachable;
+    }
+
+    switch(args.output_format) {
+        .dot => {
+            std.fs.rename(std.fs.cwd(), "tmp.dot", std.fs.cwd(), args.output_file) catch {
+                debug("ERROR: Could not create output file: {s}\n", .{args.output_file});
+            };
+        },
+        .png, .svg => {
+            callDot("tmp.dot", args.output_file, args.output_format) catch |e| {
+                debug("ERROR: dot failed - {s}\n", .{e});
+                return errors.ProcessError;
+            };
+        },
+    }
+    // Call external dot to convert
+}
+
+
+pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const u8) errors!void {
+    // Allocate sufficiently big input and output buffers (1MB to begin with)
+    // TODO: Allocate larger buffer on heap?
+    var input_buffer = std.BoundedArray(u8, 1024 * 1024).init(0) catch unreachable;
+    
+    // Open path_hidot_input and read to input-buffer
+    input_buffer.resize(
+        readFile(std.fs.cwd(), path_hidot_input, input_buffer.unusedCapacitySlice()) catch { return errors.CouldNotReadInputFile; }
+    ) catch {
+        unreachable; // Because readFile will fail because of unsufficient storage in unusedCapacitySlice() before .resize() fails.
+        // return errors.ProcessError;
+    };
+
+    var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch {
+        return errors.ProcessError;
+    };
+
+    defer file.close();
+    _ = hidot.hidotToDot(input_buffer.slice(), file) catch |e| {
+        debug("ERROR: Got error from libhidot: {s}\n", .{e});
+        return errors.ProcessError;
+    };
+}
+
+
+fn callDot(input_file: []const u8, output_file: []const u8, output_format: OutputFormat) !void {
+    var allocator = std.testing.allocator;
+    var output_file_arg_buf: [1024]u8 = undefined;
+    var output_file_arg = try std.fmt.bufPrint(output_file_arg_buf[0..], "-o{s}", .{output_file});
+
+    const result = try std.ChildProcess.exec(.{
+                                .allocator = allocator,
+                                .argv = &[_][]const u8{"dot", input_file, output_file_arg, switch(output_format) {
+                                    .png => "-Tpng",
+                                    .svg => "-Tsvg",
+                                    else => unreachable
+                                }},
+                                .max_output_bytes = 128,
+                            });
+    _ = result;
+    
+    defer {
+        allocator.free(result.stderr);
+        allocator.free(result.stdout);
+    }
+}
+
+
+fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {
+    var file = try base_dir.openFile(path, .{ .read = true });
+    defer file.close();
+
+    return try file.readAll(target_buf[0..]);
+}
+
+fn writeFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !void {
+    var file = try base_dir.createFile(path, .{ .truncate = true });
+    defer file.close();
+
+    return try file.writeAll(target_buf[0..]);
+}
+

@@ -48,6 +48,12 @@ edge uses {
     targetSymbol: arrow_open
 }
 
+edge implements {
+    label: "Implements"
+    style: dashed
+    targetSymbol: arrow_open
+}
+
 edge depends_on {
     label: "Depends on"
     style: solid

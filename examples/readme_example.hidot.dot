@@ -1,0 +1,7 @@
+strict digraph {
+    "IIterator"[label="IIterator\n<Interface>",shape="diamond",]
+    "MySomething"[label="MySomething\n[Module]",shape="box",]
+    "SomeDependency"[label="SomeDependency\n[Module]",shape="box",]
+    "MySomething"->"IIterator"[label="Implements",style="dashed",]
+    "MySomething"->"SomeDependency"[label="Depends on",style="solid",]
+}

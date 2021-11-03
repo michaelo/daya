@@ -30,6 +30,7 @@ pub fn hidotToDot(buf: []const u8, file: std.fs.File) !usize {
     return try dot.difToDotFile(&mydif, file);
 }
 
+// TODO: Move to compiler...
 pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const u8) !void {
     // Allocate sufficiently big input and output buffers (1MB to begin with)
     var input_buffer = initBoundedArray(u8, 1024 * 1024);

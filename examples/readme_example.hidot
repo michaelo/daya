@@ -1,0 +1,36 @@
+// Define node-types
+node Interface {
+    label: "<Interface>"
+    shape: diamond
+    color: #000000
+    background: #ffffff
+}
+
+node Module {
+    label: "[Module]"
+    shape: box
+    color: #000000
+    background: #ffffff
+}
+
+// Define edge/relationship-types
+edge implements {
+    label: "Implements"
+    style: dashed
+    targetSymbol: arrow_open
+}
+
+edge depends_on {
+    label: "Depends on"
+    style: solid
+    targetSymbol: arrow_open
+}
+
+// Declare the module-instances
+IIterator: Interface
+MySomething: Module
+SomeDependency: Module
+
+// Describe relationships between modules
+MySomething implements IIterator
+MySomething depends_on SomeDependency

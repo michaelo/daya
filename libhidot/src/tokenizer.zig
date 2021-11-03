@@ -202,6 +202,7 @@ const Tokenizer = struct {
             }
         } else {
             // eof
+            // TODO: Pass .nl before .eof to simplify parser?
             result.end = self.pos;
         }
         result.slice = self.buf[result.start..result.end];
