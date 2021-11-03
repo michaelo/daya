@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
 const dif = @import("dif.zig");
 const dot = @import("dot.zig");
 const tokenizer = @import("tokenizer.zig");
@@ -6,6 +8,14 @@ const tokenizer = @import("tokenizer.zig");
 const initBoundedArray = @import("utils.zig").initBoundedArray;
 const Token = @import("tokenizer.zig").Token;
 const Dif = dif.Dif;
+
+pub const LIB_VERSION = blk: {
+    if (builtin.mode != .Debug) {
+        break :blk @embedFile("../VERSION");
+    } else {
+        break :blk @embedFile("../VERSION") ++ "-UNRELEASED";
+    }
+};
 
 const debug = std.debug.print;
 
@@ -39,9 +49,6 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
     // try writeFile(std.fs.cwd(), path_dot_output, output_buffer.slice());
 }
 
-pub fn version() []const u8 {
-    return "libhidot v" ++ @embedFile("../VERSION");
-}
 
 // test "dummy" {
 //     debug("sizeOf(Dif): {d}kb\n", .{@divFloor(@sizeOf(Dif), 1024)});
