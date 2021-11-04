@@ -1,10 +1,12 @@
 /// Module for taking the DIF and convert it into proper DOT
 
 const std = @import("std");
+const testing = std.testing;
+
 const dif = @import("dif.zig");
 const Dif = dif.Dif;
 
-fn writeNodeFields(node: *const dif.NodeInstance, def: *const dif.NodeDefinition, writer: std.fs.File.Writer) !void {
+fn writeNodeFields(comptime Writer: type, node: *const dif.NodeInstance, def: *const dif.NodeDefinition, writer: Writer) !void {
     try writer.writeAll("[");
     if(def.label) |value| {
         try writer.print("label=\"{s}\\n{s}\",", .{node.name,value});
@@ -15,7 +17,8 @@ fn writeNodeFields(node: *const dif.NodeInstance, def: *const dif.NodeDefinition
     try writer.writeAll("]");
 }
 
-fn writeRelationshipFields(def: *const dif.Relationship, writer: std.fs.File.Writer) !void {
+
+fn writeRelationshipFields(comptime Writer: type, def: *const dif.Relationship, writer: Writer) !void {
     try writer.writeAll("[");
     if(def.edge.label) |value| {
         try writer.print("label=\"{s}\",", .{value});
@@ -27,8 +30,7 @@ fn writeRelationshipFields(def: *const dif.Relationship, writer: std.fs.File.Wri
 }
 
 /// Take the Dif and convert it to well-defined DOT. Returns size of dot-buffer
-pub fn difToDotFile(src_dif: *Dif, file: std.fs.File) !usize {
-    var writer = file.writer();
+pub fn difToDot(comptime Writer: type, src_dif: *Dif, writer: Writer) !usize {
     try writer.writeAll("strict digraph {\n");
     var len: usize = 0;
     /////////////////////////////
@@ -38,7 +40,7 @@ pub fn difToDotFile(src_dif: *Dif, file: std.fs.File) !usize {
     // TODO: Pr node, resolve the corresponding nodeDefinition and create entry
     for(src_dif.nodeInstance.slice()) |el| {
         try writer.print("    \"{s}\"", .{el.name});
-        _ = try writeNodeFields(&el, el.type, writer);
+        _ = try writeNodeFields(Writer, &el, el.type, writer);
         try writer.writeAll("\n");
     }
 
@@ -46,7 +48,7 @@ pub fn difToDotFile(src_dif: *Dif, file: std.fs.File) !usize {
     for(src_dif.nodeInstance.slice()) |*el| {
         for(el.relationships.slice()) |*rel| {
             try writer.print("    \"{s}\"->\"{s}\"", .{el.name, rel.target.name});
-            _ = try writeRelationshipFields(rel, writer);
+            _ = try writeRelationshipFields(Writer, rel, writer);
             try writer.writeAll("\n");
 
         }

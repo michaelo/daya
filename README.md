@@ -22,14 +22,14 @@ Hidot format example:
         label: "<Interface>"
         shape: diamond
         color: #000000
-        background: #ffffff;
+        background: #ffffff
     }
 
     node Module {
         label: "[Module]"
         shape: box
         color: #000000
-        background: #ffffff;
+        background: #ffffff
     }
 
     // Define edge/relationship-types

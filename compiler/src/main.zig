@@ -80,7 +80,7 @@ fn argHasValue(arg: []const u8, full: []const u8, short: ?[]const u8) ?[]const u
 }
 
 fn getLowercaseFileext(file: []const u8, scrap: []u8) ![]u8 {
-    var last_dot = std.mem.lastIndexOf(u8, file, ".") orelse return error.NoDot;
+    var last_dot = std.mem.lastIndexOf(u8, file, ".") orelse return error.NoExtFound;
     return std.ascii.lowerString(scrap, file[last_dot+1..]);
 }
 
@@ -246,7 +246,7 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
     };
 
     defer file.close();
-    _ = hidot.hidotToDot(input_buffer.slice(), file) catch |e| {
+    _ = hidot.hidotToDot(std.fs.File.Writer, input_buffer.slice(), file.writer()) catch |e| {
         debug("ERROR: Got error from libhidot: {s}\n", .{e});
         return errors.ProcessError;
     };
