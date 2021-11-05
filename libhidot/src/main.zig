@@ -20,14 +20,13 @@ pub const LIB_VERSION = blk: {
 const debug = std.debug.print;
 
 /// Full process from input-buffer of hidot-format to ouput-buffer of dot-format
-// fn hidotToDot(buf: []const u8, out_buf: []u8) !usize {
-pub fn hidotToDot(comptime Writer: type, buf: []const u8, writer: Writer) !usize {
+pub fn hidotToDot(comptime Writer: type, buf: []const u8, writer: Writer) !void {
     var tokens_buf = initBoundedArray(Token, 1024);
     try tokens_buf.resize(try tokenizer.tokenize(buf, tokens_buf.unusedCapacitySlice()));
     // dumpTokens(buf);
     var mydif = dif.Dif{};
     try dif.tokensToDif(tokens_buf.slice(), &mydif);
-    return try dot.difToDot(Writer, &mydif, writer);
+    try dot.difToDot(Writer, &mydif, writer);
 }
 
 pub fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {

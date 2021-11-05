@@ -1,7 +1,10 @@
 /// Module for taking the DIF and convert it into proper DOT
 
 const std = @import("std");
+const main = @import("main.zig");
+const bufwriter = @import("bufwriter.zig");
 const testing = std.testing;
+const debug = std.debug.print;
 
 const dif = @import("dif.zig");
 const Dif = dif.Dif;
@@ -17,6 +20,32 @@ fn writeNodeFields(comptime Writer: type, node: *const dif.NodeInstance, def: *c
     try writer.writeAll("]");
 }
 
+test "writeNodeFields" {
+    // Go through each fields and verify that it gets converted as expected
+    var buf: [1024]u8 = undefined;
+    var context = bufwriter.ArrayBuf {
+        .buf = buf[0..]
+    };
+
+    var writer = context.writer();
+
+    var source = 
+        \\node MyNode {
+        \\    label: "My label"
+        \\    background: #FF0000
+        \\}
+        \\Node: MyNode
+        \\
+        ;
+
+    try main.hidotToDot(bufwriter.ArrayBufWriter, source, writer);
+    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
+    // basic flow of logic is happening
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "\"Node\"") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "My label") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "bgcolor=\"#FF0000\"") != null);
+}
+
 
 fn writeRelationshipFields(comptime Writer: type, def: *const dif.Relationship, writer: Writer) !void {
     try writer.writeAll("[");
@@ -30,9 +59,9 @@ fn writeRelationshipFields(comptime Writer: type, def: *const dif.Relationship, 
 }
 
 /// Take the Dif and convert it to well-defined DOT. Returns size of dot-buffer
-pub fn difToDot(comptime Writer: type, src_dif: *Dif, writer: Writer) !usize {
+pub fn difToDot(comptime Writer: type, src_dif: *Dif, writer: Writer) !void {
     try writer.writeAll("strict digraph {\n");
-    var len: usize = 0;
+    // var len: usize = 0;
     /////////////////////////////
     // The actual graph output
     /////////////////////////////
@@ -58,7 +87,7 @@ pub fn difToDot(comptime Writer: type, src_dif: *Dif, writer: Writer) !usize {
     // Finish
     try writer.writeAll("}\n");
 
-    return len;
+    // return len;
 }
 
 

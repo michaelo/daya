@@ -87,6 +87,10 @@ pub const Color = struct {
             };
         }
     }
+
+    pub fn write(_: *Color, writer: anytype) void {
+        writer.print("#{s}{s}{s}", .{"FF", "00", "00"}) catch unreachable;
+    }
 };
 
 test "Color.fromHexstring" {

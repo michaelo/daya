@@ -94,8 +94,10 @@ TODO
 * Integrate dot / libdot
   * including libs for png and svg?
 * .hidot
-  * Support colors
+  * Support colors - simply passthrough colors to dot: https://graphviz.org/docs/attr-types/color/ . No need to convert
   * Add top-level layout{} for e.g. background, padding, layout-engine, ...
+  * Support groups
+  * TBD: Define styles ala CSS-classes, which then can be applied to the individual types?
   * ...
 * Finish v1 hidot-syntax
 * Ensure compilator supports entire hidot-syntax
