@@ -6,7 +6,7 @@ node Interface {
     label: "[Interface]"
     shape: diamond
     color: #000000
-    background: #ffffff;
+    background: #AAAAAA
 }
 
 
@@ -14,20 +14,20 @@ node Module {
     label: "[Module]"
     shape: box
     color: #000000
-    background: #ffffff;
+    background: #DDDDFF
 }
 
 node Data {
     shape: cylinder
-    color: #000000
-    background: #ffffff;
+    color: #FF0000
+    background: #99FF99
 }
 
 node Actor {
     label: "[Actor]"
     shape: polygon
     color: #000000
-    background: #ffffff;
+    background: #ffffff
 }
 
 node ExternalDependency {
@@ -38,7 +38,6 @@ node ExternalDependency {
 // TODO: Allow edges to specify valid source/target-node types? I'd say yes
 
 edge NoLabel {
-    label: "Nolabel"
     style: solid
 }
 
@@ -69,6 +68,7 @@ edge is_owned_by {
 edge knows_about {
     label: "Knows about",
     style: dashed
+    targetSymbol: arrow_filled
 }
 
 

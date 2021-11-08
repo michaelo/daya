@@ -84,7 +84,8 @@ const Tokenizer = struct {
                             state = .f_slash;
                         },
                         '#' => {
-                            state = .hash;
+                            // state = .hash; // Currently no need to do anything but passthrough the color
+                            state = .identifier;
                         },
                         'a'...'z', 'A'...'Z' => {
                             state = .identifier;
@@ -292,13 +293,13 @@ test "tokenize exploration 2" {
         // background: #ffffff
         .identifier,
         .colon,
-        .hash_color,
+        .identifier,
         .nl
 ,
         // foreground: #ffffff
         .identifier,
         .colon,
-        .hash_color,
+        .identifier,
         .nl
 ,
         // }

@@ -201,24 +201,25 @@ pub fn main() !void {
 }
 
 pub fn do(args: *AppArgs) errors!void {
+    const TEMPORARY_FILE = "__hidot_tmp.dot";
     // v0.1.0:
     // Generate a .dot anyway: tmp.dot
     //   Att! This makes it not possible to run in parallal for now
     // var scrap: [1024]u8 = undefined;
     // var output_tmp_dot = std.fmt.bufPrint(scrap, "{s}", .{});
-    try hidotFileToDotFile(args.input_file, "tmp.dot");
+    try hidotFileToDotFile(args.input_file, TEMPORARY_FILE);
     defer {
-        std.fs.cwd().deleteFile("tmp.dot") catch unreachable;
+        std.fs.cwd().deleteFile(TEMPORARY_FILE) catch unreachable;
     }
 
     switch(args.output_format) {
         .dot => {
-            std.fs.rename(std.fs.cwd(), "tmp.dot", std.fs.cwd(), args.output_file) catch {
+            std.fs.cwd().copyFile(TEMPORARY_FILE, std.fs.cwd(), args.output_file, std.fs.CopyFileOptions{}) catch {
                 debug("ERROR: Could not create output file: {s}\n", .{args.output_file});
             };
         },
         .png, .svg => {
-            callDot("tmp.dot", args.output_file, args.output_format) catch |e| {
+            callDot(TEMPORARY_FILE, args.output_file, args.output_format) catch |e| {
                 debug("ERROR: dot failed - {s}\n", .{e});
                 return errors.ProcessError;
             };

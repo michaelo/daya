@@ -17,6 +17,13 @@ fn writeNodeFields(comptime Writer: type, node: *const dif.NodeInstance, def: *c
     if(def.shape) |value| {
         try writer.print("shape=\"{s}\",", .{std.meta.tagName(value)});
     }
+    if(def.bg_color) |value| {
+        try writer.print("style=filled,bgcolor=\"{0s}\",fillcolor=\"{0s}\",", .{value});
+    }
+    if(def.fg_color) |value| {
+        try writer.print("fontcolor=\"{0s}\",", .{value});
+        // color=\"{0s}\", -- lines
+    }
     try writer.writeAll("]");
 }
 
@@ -32,6 +39,7 @@ test "writeNodeFields" {
     var source = 
         \\node MyNode {
         \\    label: "My label"
+        \\    color: #000000
         \\    background: #FF0000
         \\}
         \\Node: MyNode
@@ -41,9 +49,11 @@ test "writeNodeFields" {
     try main.hidotToDot(bufwriter.ArrayBufWriter, source, writer);
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
+    // debug("out: {s}\n", .{context.slice()});
     try testing.expect(std.mem.indexOf(u8, context.slice(), "\"Node\"") != null);
     try testing.expect(std.mem.indexOf(u8, context.slice(), "My label") != null);
     try testing.expect(std.mem.indexOf(u8, context.slice(), "bgcolor=\"#FF0000\"") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "color=\"#000000\"") != null);
 }
 
 
@@ -55,7 +65,63 @@ fn writeRelationshipFields(comptime Writer: type, def: *const dif.Relationship, 
     if(def.edge.edge_style) |value| {
         try writer.print("style=\"{s}\",", .{std.meta.tagName(value)});
     }
+    {
+        var arrow = switch(def.edge.target_symbol) {
+            .arrow_open => "vee",
+            .arrow_closed => "onormal",
+            .arrow_filled => "normal",
+            .none => "none",
+            // else => return error.NoSuchArrow,
+        };
+        try writer.print("arrowhead={s},", .{arrow});
+    }
+
+    {
+        var arrow = switch(def.edge.source_symbol) {
+            .arrow_open => "vee",
+            .arrow_closed => "onormal",
+            .arrow_filled => "normal",
+            .none => "none",
+            // else => return error.NoSuchArrow,
+        };
+        // TODO: Currently setting dir=both here, but perhaps we should define a set of common defaults at top? E.g. fill, dir=both etc?
+        try writer.print("arrowtail={s},dir=both,", .{arrow});
+    }
+
     try writer.writeAll("]");
+}
+
+
+test "writeRelationshipFields" {
+    // Go through each fields and verify that it gets converted as expected
+    var buf: [1024]u8 = undefined;
+    var context = bufwriter.ArrayBuf {
+        .buf = buf[0..]
+    };
+
+    var writer = context.writer();
+
+    var source = 
+        \\node MyNode {}
+        \\edge Uses {
+        \\    label: "Edge label"
+        \\    sourceSymbol: arrow_filled
+        \\    targetSymbol: arrow_open
+        \\}
+        \\NodeA: MyNode
+        \\NodeB: MyNode
+        \\NodeA Uses NodeB
+        \\
+        ;
+
+    try main.hidotToDot(bufwriter.ArrayBufWriter, source, writer);
+    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
+    // basic flow of logic is happening
+    // debug("out: {s}\n", .{context.slice()});
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);
+    // try testing.expect(std.mem.indexOf(u8, context.slice(), "Uses") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowhead=vee") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowtail=normal") != null);
 }
 
 /// Take the Dif and convert it to well-defined DOT. Returns size of dot-buffer

@@ -16,8 +16,8 @@ pub const NodeDefinition = struct {
     label: ?[]const u8 = null,
     shape: ?NodeShape = .box,
     // TODO: Add more style-stuff
-    bg_color: ?Color = null,
-    fg_color: ?Color = null,
+    bg_color: ?[]const u8 = null,
+    fg_color: ?[]const u8 = null,
 };
 
 pub const EdgeDefinition = struct {
@@ -26,7 +26,7 @@ pub const EdgeDefinition = struct {
     edge_style: ?EdgeStyle = EdgeStyle.solid,
     source_symbol: EdgeEndStyle = EdgeEndStyle.none,
     source_label: ?[]const u8 = null,
-    target_symbol: ?EdgeEndStyle = EdgeEndStyle.none,
+    target_symbol: EdgeEndStyle = EdgeEndStyle.arrow_open,
     target_label: ?[]const u8 = null,
 };
 
@@ -141,6 +141,7 @@ pub const EdgeEndStyle = enum {
     none,
     arrow_open,
     arrow_closed,
+    arrow_filled,
 
     pub fn fromString(name: []const u8) !EdgeEndStyle {
         return std.meta.stringToEnum(EdgeEndStyle, name) orelse error.InvalidValue;
@@ -183,25 +184,19 @@ fn parseLabel(tokens: []const Token) []const u8 {
     return tokens[2].slice;
 }
 
-fn parseColor(tokens: []const Token) Color {
+fn parseColor(tokens: []const Token) []const u8 {
     assert(tokens.len > 2);
     assert(tokens[1].typ == .colon);
-    assert(tokens[2].typ == .hash_color);
-    return Color.fromHexstring(tokens[2].slice);
+    assert(tokens[2].typ == .identifier);
+    // assert(tokens[2].typ == .hash_color);
+    // return Color.fromHexstring(tokens[2].slice);
+    return tokens[2].slice;
 }
 
 fn parseNodeDefinition(name: []const u8, tokens: []const Token) !NodeDefinition {
     var result = NodeDefinition{
         .name = name,
     };
-
-    var state: enum {
-        start,
-        GotKey,
-        Gotcolon,
-        // GotValue
-    } = .start;
-    _ = state;
 
     // TODO: Iterate over tokens to find properties
     // now: label, shape
