@@ -87,7 +87,7 @@ const Tokenizer = struct {
                             // state = .hash; // Currently no need to do anything but passthrough the color
                             state = .identifier;
                         },
-                        'a'...'z', 'A'...'Z' => {
+                        'a'...'z', 'A'...'Z', '-' => {
                             state = .identifier;
                         },
                         '0'...'9' => {
@@ -146,7 +146,7 @@ const Tokenizer = struct {
                 },
                 .identifier => {
                     switch (c) {
-                        'a'...'z', 'A'...'Z', '0'...'9','_' => {},
+                        'a'...'z', 'A'...'Z', '0'...'9','_','-','<','>' => {},
                         else => {
                             result.end = self.pos; // TBD: +1?
                             result.typ = keywordOridentifier(self.buf[result.start..result.end]);

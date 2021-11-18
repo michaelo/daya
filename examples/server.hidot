@@ -1,0 +1,49 @@
+// Activity diagram
+
+node Start {
+    label: ""
+    shape: circle
+}
+
+node Finish {
+    label: ""
+    shape: circle
+}
+
+node Action {}
+
+node If {
+    shape: diamond
+}
+
+edge -> {}
+
+
+edge true {
+    label: "true"
+}
+
+edge false {
+    label: "false"
+}
+// End of activity diagram general definitions
+
+Start: Start
+Listen: Action
+GetConnection: Action
+SpawnThread: Action
+ParseRequstChunk: Action
+RequestFinished: If
+Finish: Finish
+
+// TBD: Instances should be allowed to take instance-specific-parameters
+//      E.g. a generic if-style and specific ifs?
+//           or should nodes be able to inherit from each other. Re CSS-class-strategy
+
+Start -> Listen
+Listen -> GetConnection
+GetConnection -> SpawnThread
+SpawnThread -> ParseRequstChunk
+ParseRequstChunk -> RequestFinished
+RequestFinished false ParseRequstChunk
+RequestFinished true Finish
