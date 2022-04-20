@@ -9,6 +9,10 @@ fn keywordOridentifier(value: []const u8) TokenType {
         return TokenType.keyword_edge;
     } else if (std.mem.eql(u8, value, "layout")) {
         return TokenType.keyword_layout;
+    } else if (std.mem.eql(u8, value, "group")) {
+        return TokenType.keyword_group;
+    } else if (std.mem.eql(u8, value, "layer")) {
+        return TokenType.keyword_layer;
     }
 
     return TokenType.identifier;
@@ -17,10 +21,14 @@ fn keywordOridentifier(value: []const u8) TokenType {
 pub const TokenType = enum {
     invalid,
     eof,
+    eos,
     nl,
+    value,
     keyword_node,
     keyword_edge,
+    keyword_group,
     keyword_layout,
+    keyword_layer,
     identifier,
     single_line_comment,
     brace_start,
@@ -109,22 +117,27 @@ const Tokenizer = struct {
                             result.end = self.pos;
                             break;
                         },
-                        ':' => { // TODO: Doesn't hit...
+                        ':' => {
                             result.typ = .colon;
                             self.pos += 1;
                             result.end = self.pos;
                             break;
                         },
-                        // TBD: Any semantic use for newlines, or simply treat it like any space? Will then need another separator, e.g. ;
-                        '\n' => {
-                            result.typ = .nl
-                    ;
+                        ';' => {
+                            result.typ = .eos;
                             self.pos += 1;
                             result.end = self.pos;
                             break;
                         },
+                        // TBD: Any semantic use for newlines, or simply treat it like any space? Will then need another separator, e.g. ;
+                        // '\n' => {
+                        //     result.typ = .nl;
+                        //     self.pos += 1;
+                        //     result.end = self.pos;
+                        //     break;
+                        // },
                         // Whitespace are separators
-                        ' ', '\t' => {
+                        ' ', '\t', '\n' => {
                             result.start = self.pos + 1;
                         },
                         else => {
@@ -136,6 +149,9 @@ const Tokenizer = struct {
                 .string => {
                     switch (c) {
                         '"' => {
+                            // Ignore escaped "'s
+                            if(self.buf[self.pos-1] == '\\') continue;
+
                             result.end = self.pos;
                             result.typ = .string;
                             self.pos += 1;
@@ -146,13 +162,15 @@ const Tokenizer = struct {
                 },
                 .identifier => {
                     switch (c) {
-                        'a'...'z', 'A'...'Z', '0'...'9','_','-','<','>' => {},
-                        else => {
-                            result.end = self.pos; // TBD: +1?
+                        // Anything that's not whitespace, special reserver character or eos is a valid identifier
+                        // 'a'...'z', 'A'...'Z', '0'...'9','_','-','<','>' => {},
+                        '\n', '\t', ' ', '\r', ';', '{', '}', '(', ')', ':' => {
+                            result.end = self.pos;
+                            // TODO: Should we here have control if we're on lhs/rhs? Reserved leftside-keywords could be valid values
                             result.typ = keywordOridentifier(self.buf[result.start..result.end]);
-                            // self.pos+=1;
                             break;
                         },
+                        else => {}
                     }
                 },
                 .f_slash => {
@@ -237,78 +255,128 @@ fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
 test "tokenize exploration" {
     var buf =
         \\node Module {
-        \\  label: Module
+        \\  label: "My module";
+        \\}
+        \\
+        \\// Comment here
+        \\edge relates_to {
+        \\  label: "relates to";
+        \\  color: #ffffff;
+        \\}
+        \\
+        \\edge owns;
+        \\
+        \\ModuleA: Module;
+        \\ModuleB: Module;
+        \\
+        \\ModuleA relates_to ModuleB;
+        \\ModuleB owns ModuleA {
+        \\  label: "overridden label here";
         \\}
         \\
     ;
 
     // dumpTokens(buf);
     try expectTokens(buf, &[_]TokenType{
+        // node Module {...}
         .keyword_node,
         .identifier,
         .brace_start,
-        .nl
-,
+            .identifier,
+            .colon,
+            .string,
+            .eos,
+        .brace_end,
+
+        // edge relates_to {...}
+        .keyword_edge,
+        .identifier,
+        .brace_start,
+            .identifier,
+            .colon,
+            .string,
+            .eos,
+
+            .identifier,
+            .colon,
+            .identifier, // #ffffff TODO: Parse it as hash-value already here?
+            .eos,
+        .brace_end,
+
+        // edge owns;
+        .keyword_edge,
+        .identifier,
+        .eos,
+
+        // Instantations
         .identifier,
         .colon,
         .identifier,
-        .nl
-,
+        .eos,
+
+        .identifier,
+        .colon,
+        .identifier,
+        .eos,
+
+        // Relationships
+        // ModuleA relates_to ModuleB
+        .identifier,
+        .identifier,
+        .identifier,
+        .eos,
+
+        // ModuleB owns ModuleA
+        .identifier,
+        .identifier,
+        .identifier,
+        .brace_start,
+            .identifier,
+            .colon,
+            .string,
+            .eos,
         .brace_end,
-        .nl
+
+        .eof
  });
-}   
+}
 
 test "tokenize exploration 2" {
     var buf =
-        \\layout {
-        \\    width: 600px
-        \\    height: 400px
-        \\    background: #fffffff
-        \\    foreground: #0000000
+        \\node Module {
+        \\  label: unquoted value;
+        \\  width: 300px;
         \\}
+        \\
+        \\group Components {
+        \\    group LibComponents {
+        \\        LibCompA: Component;
+        \\        LibCompB: Component;
+        \\    };
+        \\    
+        \\    group ApiComponents {
+        \\        ApiCompA: Component;
+        \\        ApiCompB: Component;
+        \\    };
+        \\
+        \\    ApiComponents uses LibComponents;
+        \\
+        \\    ApiCompA uses LibCompA;
+        \\    ApiCompA uses LibCompB;
+        \\};
+        \\
     ;
 
-    // dumpTokens(buf);
-    try expectTokens(buf, &[_]TokenType{
-        // Layout {
-        .keyword_layout,
-        .brace_start,
-        .nl
-,
-        // width: 600px
-        .identifier,
-        .colon,
-        .numeric_literal,
-        .identifier, // .numeric_unit
-        .nl
-,
-        // height: 400px
-        .identifier,
-        .colon,
-        .numeric_literal,
-        .identifier, // .numeric_unit
-        .nl
-,
-        // background: #ffffff
-        .identifier,
-        .colon,
-        .identifier,
-        .nl
-,
-        // foreground: #ffffff
-        .identifier,
-        .colon,
-        .identifier,
-        .nl
-,
-        // }
-        .brace_end,
-    });
+    var tokenizer = Tokenizer.init(buf);
+    var i: usize = 0;
+    while (true) : (i+=1) {
+        var token = tokenizer.nextToken();
+        debug("token[{d}]: {} -> {s}\n", .{i, token.typ, token.slice});
+        if(token.typ == .eof) break;
+    }
 }
 
-
-/// Adds tokens to tokens_out and returns number of tokens found/added
+// Adds tokens to tokens_out and returns number of tokens found/added
 pub fn tokenize(buf: []const u8, tokens_out: []Token) !usize {
     var tokenizer = Tokenizer.init(buf);
     var tok_idx: usize = 0;

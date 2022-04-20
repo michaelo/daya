@@ -165,7 +165,7 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
     defer arena.deinit();
-    const aa = &arena.allocator;
+    const aa = arena.allocator();
 
     const args = try std.process.argsAlloc(aa);
     defer std.process.argsFree(aa, args);
@@ -278,7 +278,7 @@ fn callDot(input_file: []const u8, output_file: []const u8, output_format: Outpu
 
 
 fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {
-    var file = try base_dir.openFile(path, .{ .read = true });
+    var file = try base_dir.openFile(path, .{ });
     defer file.close();
 
     return try file.readAll(target_buf[0..]);
