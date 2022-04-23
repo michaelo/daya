@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const Token = @import("tokenizer.zig").Token;
+const Tokenizer = @import("tokenizer.zig").Tokenizer;
 const TokenType = @import("tokenizer.zig").TokenType;
 const assert = std.debug.assert;
 const debug = std.debug.print;
@@ -386,3 +387,54 @@ pub fn tokensToDif(tokens: []const Token, out_dif: *Dif) !void {
     // Optimized strategy: parse as we go, and lazily fill up if something's out of order. Can start with requirement that defs must be top-down for simplicity, but it also enforces readability
 }
 
+const DifNodeType = enum {
+    Edge,
+    Node,
+    Group,
+    Layout,
+    Instantiation,
+    Relationship,
+    Parameter, // key=value
+};
+
+
+const DifNode = union(DifNodeType) {
+    // Common fields
+    child: ?DifNode,
+    parent: ?DifNode,
+    next_sibling: ?DifNode,
+    // TODO: Establish how to refer back to source
+    source_start_idx: u8,
+    source_slice: []const u8,
+
+    Edge: struct {
+
+    },
+    Node: struct {
+
+    },
+    Group: struct {
+
+    },
+    Layout: struct {
+
+    },
+    Instantiation: struct {
+
+    },
+    Relationship: struct {
+
+    },
+    Parameter: struct {
+
+    }
+};
+
+
+const Dififier = struct {
+    const Self = @This();
+
+    fn init(tokenizer: Tokenizer) Self {
+        return .{};
+    }
+};

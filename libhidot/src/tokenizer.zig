@@ -34,10 +34,11 @@ pub const TokenType = enum {
     brace_start,
     brace_end,
     colon,
-    arrow,
+    equal,
+    arrow, // Remove? Can rather support creating edges with names such as "->". Or keep is at as a kind of anonymous edge. Shall we then have <-, ->. <->, et.al.?
     numeric_literal,
     numeric_unit,
-    hash_color,
+    hash_color, // TODO: solve as identifier instead? And validate at a later stage?
     string,
 };
 
@@ -123,6 +124,12 @@ const Tokenizer = struct {
                             result.end = self.pos;
                             break;
                         },
+                        '=' => {
+                            result.typ = .equal;
+                            self.pos += 1;
+                            result.end = self.pos;
+                            break;
+                        },
                         ';' => {
                             result.typ = .eos;
                             self.pos += 1;
@@ -164,7 +171,7 @@ const Tokenizer = struct {
                     switch (c) {
                         // Anything that's not whitespace, special reserver character or eos is a valid identifier
                         // 'a'...'z', 'A'...'Z', '0'...'9','_','-','<','>' => {},
-                        '\n', '\t', ' ', '\r', ';', '{', '}', '(', ')', ':' => {
+                        '\n', '\t', ' ', '\r', ';', '{', '}', '(', ')', ':', '=' => {
                             result.end = self.pos;
                             // TODO: Should we here have control if we're on lhs/rhs? Reserved leftside-keywords could be valid values
                             result.typ = keywordOridentifier(self.buf[result.start..result.end]);
@@ -255,13 +262,13 @@ fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
 test "tokenize exploration" {
     var buf =
         \\node Module {
-        \\  label: "My module";
+        \\  label="My module";
         \\}
         \\
         \\// Comment here
         \\edge relates_to {
-        \\  label: "relates to";
-        \\  color: #ffffff;
+        \\  label="relates to";
+        \\  color=#ffffff;
         \\}
         \\
         \\edge owns;
@@ -271,7 +278,7 @@ test "tokenize exploration" {
         \\
         \\ModuleA relates_to ModuleB;
         \\ModuleB owns ModuleA {
-        \\  label: "overridden label here";
+        \\  label="overridden label here";
         \\}
         \\
     ;
@@ -283,7 +290,7 @@ test "tokenize exploration" {
         .identifier,
         .brace_start,
             .identifier,
-            .colon,
+            .equal,
             .string,
             .eos,
         .brace_end,
@@ -293,12 +300,12 @@ test "tokenize exploration" {
         .identifier,
         .brace_start,
             .identifier,
-            .colon,
+            .equal,
             .string,
             .eos,
 
             .identifier,
-            .colon,
+            .equal,
             .identifier, // #ffffff TODO: Parse it as hash-value already here?
             .eos,
         .brace_end,
@@ -332,7 +339,7 @@ test "tokenize exploration" {
         .identifier,
         .brace_start,
             .identifier,
-            .colon,
+            .equal,
             .string,
             .eos,
         .brace_end,
@@ -341,11 +348,46 @@ test "tokenize exploration" {
  });
 }
 
+// Takes 0-indexed idx into buffer, and returns the corresponding 1-indexed line and col of said character
+// Intended to be used in error-situations
+// Returns line and col=0 in in case of invalid input
+fn idxToLineCol(src: []const u8, idx: usize) struct { l: usize, c: usize} {
+    if(idx >= src.len) return .{.l=0, .c=0}; // TODO: throw error?
+
+    var l: usize = 1;
+    var lc: usize = 0;
+
+    for(src[0..idx+1]) |c| {
+        if(c == '\n') {
+            l += 1;
+            lc = 0;
+            continue;
+        }
+
+        lc += 1;
+    }
+
+    return .{.l=l, .c=lc};
+}
+
+test "idxToLineCol" {
+    var buf=
+    \\0123
+    \\56
+    \\
+    \\9
+    ;
+
+    try testing.expectEqual(idxToLineCol(buf[0..], 0), .{.l=1, .c=1});
+    try testing.expectEqual(idxToLineCol(buf[0..], 3), .{.l=1, .c=4});
+    try testing.expectEqual(idxToLineCol(buf[0..], 5), .{.l=2, .c=1});
+}
+
 test "tokenize exploration 2" {
     var buf =
         \\node Module {
-        \\  label: unquoted value;
-        \\  width: 300px;
+        \\  label=unquoted value;
+        \\  width=300px;
         \\}
         \\
         \\group Components {
@@ -371,7 +413,8 @@ test "tokenize exploration 2" {
     var i: usize = 0;
     while (true) : (i+=1) {
         var token = tokenizer.nextToken();
-        debug("token[{d}]: {} -> {s}\n", .{i, token.typ, token.slice});
+        var start = idxToLineCol(buf[0..], token.start);
+        debug("token[{d:2}] ({d:2}:{d:2}): {} -> {s}\n", .{i, start.l, start.c, token.typ, token.slice});
         if(token.typ == .eof) break;
     }
 }
