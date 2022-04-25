@@ -100,8 +100,9 @@ TODO
   * Add top-level layout{} for e.g. background, padding, layout-engine, ...
   * Support groups
   * TBD: Define styles ala CSS-classes, which then can be applied to the individual types?
-  * ...
   * Implement more advanced shapes? E.g. an UML-like class with sections?
+  * Implement import-functionality
+  * ...
 * Finish v1 hidot-syntax
 * Ensure compilator supports entire hidot-syntax
 * Implement web service

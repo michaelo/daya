@@ -1,14 +1,16 @@
 /// Module responsible for parsing tokens to the Diagrammer Internal Format
 
 const std = @import("std");
+const utils = @import("utils.zig");
 const Token = @import("tokenizer.zig").Token;
 const Tokenizer = @import("tokenizer.zig").Tokenizer;
 const TokenType = @import("tokenizer.zig").TokenType;
+const tokenizerDump = @import("tokenizer.zig").dump;
 const assert = std.debug.assert;
 const debug = std.debug.print;
 const testing = std.testing;
 
-const initBoundedArray = @import("utils.zig").initBoundedArray;
+const initBoundedArray = utils.initBoundedArray;
 // test
 
 /// ...
@@ -395,39 +397,97 @@ const DifNodeType = enum {
     Instantiation,
     Relationship,
     Parameter, // key=value
+    Value,
 };
 
+// const DifNodeData = union(DifNodeType) {
+//     Edge: struct {
 
-const DifNode = union(DifNodeType) {
-    // Common fields
-    child: ?DifNode,
-    parent: ?DifNode,
-    next_sibling: ?DifNode,
-    // TODO: Establish how to refer back to source
-    source_start_idx: u8,
-    source_slice: []const u8,
+//     },
+//     Node: struct {
 
-    Edge: struct {
+//     },
+//     Group: struct {
 
-    },
-    Node: struct {
+//     },
+//     Layout: struct {
 
-    },
-    Group: struct {
+//     },
+//     Instantiation: struct {
 
-    },
-    Layout: struct {
+//     },
+//     Relationship: struct {
 
-    },
-    Instantiation: struct {
+//     },
+//     Parameter: struct {
 
-    },
-    Relationship: struct {
+//     }
+// };
 
-    },
-    Parameter: struct {
+const DifNode = struct {
+    const Self = @This();
+    
+    // // Common fields
+    node_type: DifNodeType,
+    child: ?*Self = null,
+    parent: ?*Self = null,
+    next_sibling: ?*Self = null,
+    initial_token: ?Token = null, // Reference back to source
+    name: ?[]const u8 = null,
+    // // TODO: Establish how to refer back to source
+    // // source_start_idx: ?u8,
+    // // source_slice: ?[]const u8,
 
+    data: union(DifNodeType) {
+        Edge: struct {
+
+        },
+        Node: struct {
+
+        },
+        Group: struct {
+
+        },
+        Layout: struct {
+
+        },
+        Instantiation: struct {
+
+        },
+        Relationship: struct {
+
+        },
+        Parameter: struct {
+
+        },
+        Value: struct {
+            // TBD: Can also be solved as a data-field for Parameter if that's the only value-keeping type
+        }
     }
+};
+
+fn expectDifNodes(nodes: []const DifNode, expected_nodes: []const DifNodeType) !void {
+    
+    for (expected_nodes) |expected_node, i| {
+        const found_node = nodes[i];
+        testing.expectEqual(expected_node, found_node.data) catch |e| {
+            debug("Expected node[{d}] {s}, got {s}:\n\n", .{ i, expected_node, @TypeOf(found_node.data) });
+            // debug("  ({d}-{d}): '{s}'\n", .{ found_node.start, found_node.end, buf[found_node.start..found_node.end] });
+            return e;
+        };
+    }
+}
+
+test "expectDifNodes" {
+    try expectDifNodes(&[_]DifNode{
+        DifNode { .node_type = .Edge, .data = .{.Edge=.{}} },
+        DifNode { .node_type = .Parameter, .data = .{.Parameter=.{}} },
+    }, &[_]DifNodeType{.Edge, .Parameter});
+}
+
+// Used mid-parse
+const DifNodeWIP = struct {
+
 };
 
 
@@ -435,6 +495,352 @@ const Dififier = struct {
     const Self = @This();
 
     fn init(tokenizer: Tokenizer) Self {
+        _ = tokenizer;
         return .{};
     }
 };
+
+// TODO: splitte opp slik at vi alltid popper token for hver iterasjon og _alt_ håndteres av parse-state?
+// TODO: lag en semi-rekursiv løsning, men med felles "allokator" (BoundedArray) og tokenizer.
+const DififierState = enum {
+    start,
+    kwnode,
+    // node_w_data,
+    kwedge,
+    // edge_w_data,
+    data, // To be used by any type supporting {}-sets
+    relationship, // any statement found without initial keyword is assumed to be a relationship
+    kwgroup,
+    kwlayout,
+    kwlayer,
+    parameter,
+};
+
+fn expectToken(token: Token, tokenType: TokenType) bool {
+    if(token.typ != tokenType) {
+        debug("ERROR: Expected token-type {s}, got {s}: {s}\n", .{tokenType, token.typ, token.slice});
+        return false;
+    }
+    return true;
+}
+
+test "state" {
+    var buf =
+        \\node Module {
+        \\  label=unquotedvalue;
+        \\//  width=300px;
+        \\}
+        \\
+        \\edge uses;
+        \\edge contains {
+        \\  label="contains for realz";
+        \\}
+        \\
+        \\group Components {
+        \\    group LibComponents {
+        \\        LibCompA: Component;
+        \\        LibCompB: Component;
+        \\    };
+        \\    
+        \\    group ApiComponents {
+        \\        ApiCompA: Component;
+        \\        ApiCompB: Component;
+        \\    };
+        \\
+        \\    ApiComponents uses LibComponents;
+        \\
+        \\    ApiCompA uses LibCompA;
+        \\    ApiCompA uses LibCompB;
+        \\};
+        \\
+    ;
+    tokenizerDump(buf);
+
+    var tokenizer = Tokenizer.init(buf[0..]);
+    var nodes = initBoundedArray(DifNode, 2048); // TODO: dynamically allocate to support arbitrary sizes of documents
+    var state = DififierState.start;
+    var parent_node: ?*DifNode = null;
+    var current_node: *DifNode = undefined;
+    
+    debug("START\n", .{});
+    var token: Token = undefined;
+    main: while(true) {
+        if(token.typ == .eof) break;
+
+        switch(state) {
+            .start => {
+                token = tokenizer.nextToken();
+                switch(token.typ) {
+                    .keyword_edge => {
+                        debug("start, found edge\n", .{});
+                        state = DififierState.kwedge;
+                    },
+
+                    // .keyword_node => {
+
+                    // },
+
+                    // .keyword_layout => {
+
+                    // },
+
+                    // .keyword_layer => {
+
+                    // },
+
+                    // .keyword_group => {
+
+                    // },
+                    else => {}
+                }
+            },
+            // Edge parsing
+            .kwedge => {
+                debug("Adding edge\n", .{});
+                current_node = nodes.addOneAssumeCapacity();
+
+                // Expect identifier
+                token = tokenizer.nextToken();
+                if(token.typ != .identifier) {
+                    debug("FATAL: 1 Expected identifier, got: {s}\n", .{token.slice});
+                    break :main;
+                }
+
+                current_node.* = DifNode{
+                    .node_type = .Edge,
+                    .parent = parent_node,
+                    .name = token.slice,
+                    .data = .{
+                        .Edge = .{}
+                    }
+                };
+        
+                token = tokenizer.nextToken();
+                switch(token.typ) {
+                    .eos => {
+                        // Store and move on
+                        // Alloc new node to continue workin
+                        current_node = nodes.addOneAssumeCapacity();
+                        state = .start;
+                    },
+                    .brace_start =>  {
+                        state = .data;
+                    },
+                    else => {
+                        debug("FATAL: Expected ; or {{, got: {s}\n", .{token.slice});
+                        break :main;
+                    }
+                }
+            },
+            .data => {
+                parent_node = current_node;
+                // debug("data: {s}\n", .{token.typ});
+                token = tokenizer.nextToken();
+                switch(token.typ) {
+                    .identifier => {
+                        state = .parameter;
+                    },
+                    .brace_end => {
+                        // Store and move on
+                        parent_node = current_node.parent; // TODO: Revise.
+                        current_node = nodes.addOneAssumeCapacity();
+                        state = .start;
+                    },
+                    else => {
+                        debug("FATAL: Expected identifier or }}, got: {s} -> {s}\n", .{@tagName(token.typ), token.slice});
+                        break :main;
+                    }
+                }
+            },
+            // Node parsing
+            // Layout parsing
+            // Layer parsing
+            // Group parsing
+            .parameter => {
+                // Parse a key/value-set
+                // current token is the identifier
+                // next token shall be =
+                // then we shall get the value
+                if(!expectToken(token, .identifier)) {
+                    break :main;
+                }
+                current_node.* = DifNode {
+                    .node_type = .Parameter,
+                    .parent = parent_node,
+                    .name = token.slice,
+                    .data = .{
+                        .Parameter = .{}
+                    }
+                };
+                parent_node = current_node;
+                token = tokenizer.nextToken();
+                if(!expectToken(token, .equal)) {
+                    break :main;
+                }
+                token = tokenizer.nextToken();
+                switch(token.typ) {
+                    // must be any of the value-types
+                    .identifier => {
+                        current_node = nodes.addOneAssumeCapacity();
+                        current_node.* = DifNode {
+                            .node_type = .Value,
+                            .parent = parent_node,
+                            .name = token.slice,
+                            .data = .{
+                                .Value = .{}
+                            }
+                        };
+                    },
+                    .string => {
+                        current_node = nodes.addOneAssumeCapacity();
+                        current_node.* = DifNode {
+                            .node_type = .Value,
+                            .parent = parent_node,
+                            .name = token.slice,
+                            .data = .{
+                                .Value = .{}
+                            }
+                        };
+                    },
+                    else => {
+                        debug("FATAL: Expected value value-type, got: {s}\n", .{token.slice});
+                        break :main;
+                    }
+                }
+                token = tokenizer.nextToken();
+                if(!expectToken(token, .eos)) {
+                    break :main;
+                }
+                token = tokenizer.nextToken();
+                switch(token.typ) {
+                    .brace_end => {
+                        state = .start;
+                    },
+                    .identifier => {
+                        state = .data;
+                    },
+                    else => {
+                        debug("FATAL: Expected identifier or }}, got: {s}\n", .{token.slice});
+                        break :main;
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+    debug("DONE\n", .{});
+
+    for(nodes.slice()) |node| {
+        debug("parsed: {s}: {s}\n", .{node.node_type, node.name});
+    }
+}
+
+test "Dififier" {
+    var buf =
+        \\node Module {
+        \\  label=unquoted value;
+        \\  width=300px;
+        \\}
+        \\
+        \\edge uses;
+        \\edge contains {
+        \\  label="contains for realz";
+        \\}
+        \\
+        \\group Components {
+        \\    group LibComponents {
+        \\        LibCompA: Component;
+        \\        LibCompB: Component;
+        \\    };
+        \\    
+        \\    group ApiComponents {
+        \\        ApiCompA: Component;
+        \\        ApiCompB: Component;
+        \\    };
+        \\
+        \\    ApiComponents uses LibComponents;
+        \\
+        \\    ApiCompA uses LibCompA;
+        \\    ApiCompA uses LibCompB;
+        \\};
+        \\
+    ;
+
+    var tokenizer = Tokenizer.init(buf[0..]);
+
+    var nodes = initBoundedArray(DifNode, 2048); // TODO: dynamically allocate to support arbitrary sizes of documents
+
+    var parent_node: ?*DifNode = null;
+
+    while(true) {
+        // TODO: This can't always happen since we might pre-read tokens inside cases below. Or shall we go full tokenizer-style? With states etc? Or abort fully when we get something unexpected.
+        var token = tokenizer.nextToken();
+
+        switch(token.typ) {
+            .eof => break,
+            .keyword_edge => {
+                var node = nodes.addOneAssumeCapacity();
+
+                // Expects next: identified (name), then either: {...} or ;
+                node.* = .{
+                    .node_type = .Edge,
+                    .parent = parent_node,
+                    .data = .{
+                        .Edge = .{}
+                    }
+                };
+                // prev_node = node;
+
+                token = tokenizer.nextToken();
+                switch(token.typ) {
+                    .identifier => {
+                        node.name = token.slice;
+                    },
+                    else => {
+                        debug("FATAL: Expected identifier, got: {s}\n", .{token.slice});
+                        return;
+                    }
+                }
+                switch(token.typ) {
+                    .eos => {
+
+                    },
+                    .brace_start => {
+                        parent_node = node;
+                    },
+                    else => {
+                        debug("FATAL: Expected ; or {{, got: {s}\n", .{token.slice});
+                        return;
+                    }
+                }
+                debug("got edge: {s}\n", .{tokenizer.nextToken().slice});
+            },
+            .identifer => {
+
+            },
+            .equal => {
+
+            },
+            // .keyword_node => {
+            //     // Expects next: identified (name), then either: {...} or ;
+            //     debug("got node: {s}\n", .{tokenizer.nextToken().slice});
+            // },
+            // .keyword_group => {
+            //     // Expects next: identified (name), then {...}
+            //     debug("got group: {s}\n", .{tokenizer.nextToken().slice});
+            // },
+            // .keyword_layer => {
+            //     // Expects next: identified (name), then {...}
+            //     debug("got layer: {s}\n", .{tokenizer.nextToken().slice});
+            // }, 
+            else => {
+                debug("Unhandled token: {s}\n", .{token.slice});
+            },
+        }
+    }
+
+    // TODO: Process and print as tree
+    for(nodes.slice()) |node| {
+        debug("parsed: {s}: {s}\n", .{node.node_type, node.name});
+    }
+}

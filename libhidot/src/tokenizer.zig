@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 const testing = std.testing;
 const debug = std.debug.print;
 
@@ -49,7 +50,7 @@ pub const Token = struct {
     slice: []const u8, // Requires source buf to be available
 };
 
-const Tokenizer = struct {
+pub const Tokenizer = struct {
     const State = enum {
         start,
         string,
@@ -66,13 +67,13 @@ const Tokenizer = struct {
     pos: u64 = 0,
     // state: ParseState = .start,
 
-    fn init(buffer: []const u8) Tokenizer {
+    pub fn init(buffer: []const u8) Tokenizer {
         return Tokenizer{
             .buf = buffer,
         };
     }
 
-    fn nextToken(self: *Tokenizer) Token {
+    pub fn nextToken(self: *Tokenizer) Token {
         var result = Token{
             .typ = .eof,
             .start = self.pos,
@@ -268,7 +269,7 @@ test "tokenize exploration" {
         \\// Comment here
         \\edge relates_to {
         \\  label="relates to";
-        \\  color=#ffffff;
+        \\  color=#ffffff;
         \\}
         \\
         \\edge owns;
@@ -348,39 +349,16 @@ test "tokenize exploration" {
  });
 }
 
-// Takes 0-indexed idx into buffer, and returns the corresponding 1-indexed line and col of said character
-// Intended to be used in error-situations
-// Returns line and col=0 in in case of invalid input
-fn idxToLineCol(src: []const u8, idx: usize) struct { l: usize, c: usize} {
-    if(idx >= src.len) return .{.l=0, .c=0}; // TODO: throw error?
-
-    var l: usize = 1;
-    var lc: usize = 0;
-
-    for(src[0..idx+1]) |c| {
-        if(c == '\n') {
-            l += 1;
-            lc = 0;
-            continue;
-        }
-
-        lc += 1;
+pub fn dump(buf: []const u8) void {
+    var tokenizer = Tokenizer.init(buf);
+    var i: usize = 0;
+    
+    while (true) : (i+=1) {
+        var token = tokenizer.nextToken();
+        var start = utils.idxToLineCol(buf[0..], token.start);
+        debug("token[{d:0>2}] ({d:0>2}:{d:0>2}): {s:<16} -> {s}\n", .{i, start.l, start.c, @tagName(token.typ), token.slice});
+        if(token.typ == .eof) break;
     }
-
-    return .{.l=l, .c=lc};
-}
-
-test "idxToLineCol" {
-    var buf=
-    \\0123
-    \\56
-    \\
-    \\9
-    ;
-
-    try testing.expectEqual(idxToLineCol(buf[0..], 0), .{.l=1, .c=1});
-    try testing.expectEqual(idxToLineCol(buf[0..], 3), .{.l=1, .c=4});
-    try testing.expectEqual(idxToLineCol(buf[0..], 5), .{.l=2, .c=1});
 }
 
 test "tokenize exploration 2" {
@@ -411,9 +389,10 @@ test "tokenize exploration 2" {
 
     var tokenizer = Tokenizer.init(buf);
     var i: usize = 0;
+    
     while (true) : (i+=1) {
         var token = tokenizer.nextToken();
-        var start = idxToLineCol(buf[0..], token.start);
+        var start = utils.idxToLineCol(buf[0..], token.start);
         debug("token[{d:2}] ({d:2}:{d:2}): {} -> {s}\n", .{i, start.l, start.c, token.typ, token.slice});
         if(token.typ == .eof) break;
     }
@@ -423,6 +402,7 @@ test "tokenize exploration 2" {
 pub fn tokenize(buf: []const u8, tokens_out: []Token) !usize {
     var tokenizer = Tokenizer.init(buf);
     var tok_idx: usize = 0;
+
     while (tok_idx < buf.len) {
         const token = tokenizer.nextToken();
         tokens_out[tok_idx] = token;
@@ -432,6 +412,7 @@ pub fn tokenize(buf: []const u8, tokens_out: []Token) !usize {
     } else if (tok_idx == buf.len) {
         return error.Overflow;
     }
+
     return tok_idx;
 }
 
