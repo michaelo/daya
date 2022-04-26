@@ -390,6 +390,7 @@ pub fn tokensToDif(tokens: []const Token, out_dif: *Dif) !void {
 }
 
 const DifNodeType = enum {
+    Unknown,
     Edge,
     Node,
     Group,
@@ -429,7 +430,7 @@ const DifNode = struct {
     
     // // Common fields
     node_type: DifNodeType,
-    child: ?*Self = null,
+    first_child: ?*Self = null,
     parent: ?*Self = null,
     next_sibling: ?*Self = null,
     initial_token: ?Token = null, // Reference back to source
@@ -462,6 +463,9 @@ const DifNode = struct {
         },
         Value: struct {
             // TBD: Can also be solved as a data-field for Parameter if that's the only value-keeping type
+        },
+        Unknown: struct {
+
         }
     }
 };
@@ -534,6 +538,7 @@ test "state" {
         \\edge uses;
         \\edge contains {
         \\  label="contains for realz";
+        \\  color="black";
         \\}
         \\
         \\group Components {
@@ -560,12 +565,14 @@ test "state" {
     var nodes = initBoundedArray(DifNode, 2048); // TODO: dynamically allocate to support arbitrary sizes of documents
     var state = DififierState.start;
     var parent_node: ?*DifNode = null;
+    var prev_sibling: ?*DifNode = null;
     var current_node: *DifNode = undefined;
     
     debug("START\n", .{});
     var token: Token = undefined;
     main: while(true) {
         if(token.typ == .eof) break;
+        debug("state: {s}\n", .{@tagName(state)});
 
         switch(state) {
             .start => {
@@ -574,6 +581,7 @@ test "state" {
                     .keyword_edge => {
                         debug("start, found edge\n", .{});
                         state = DififierState.kwedge;
+                        // break :main_inner;
                     },
 
                     // .keyword_node => {
@@ -614,17 +622,24 @@ test "state" {
                         .Edge = .{}
                     }
                 };
+
+                if(prev_sibling) |actual_prev| {
+                    actual_prev.next_sibling = current_node;
+                } else if(parent_node) |parent| {
+                    // Att! any way to end up here without a parent set?
+                    parent.first_child = current_node;
+                }
+
+                prev_sibling = current_node;
         
                 token = tokenizer.nextToken();
                 switch(token.typ) {
                     .eos => {
-                        // Store and move on
-                        // Alloc new node to continue workin
-                        current_node = nodes.addOneAssumeCapacity();
                         state = .start;
                     },
                     .brace_start =>  {
                         state = .data;
+                        prev_sibling = null; // following (possible) parameter is then first child
                     },
                     else => {
                         debug("FATAL: Expected ; or {{, got: {s}\n", .{token.slice});
@@ -634,16 +649,28 @@ test "state" {
             },
             .data => {
                 parent_node = current_node;
+                // First parameter is child of "parent"
+                // TODO: Following parameters are next_sibling to the previous one
+                
+                // current_node = nodes.addOneAssumeCapacity();
+                // current_node.* = DifNode {
+                //     .node_type = .Group,
+                //     .parent = parent_node,
+                //     .data = .{
+                //         .Group = .{}
+                //     }
+                // };
                 // debug("data: {s}\n", .{token.typ});
                 token = tokenizer.nextToken();
                 switch(token.typ) {
                     .identifier => {
+                        parent_node = current_node;
                         state = .parameter;
                     },
                     .brace_end => {
                         // Store and move on
-                        parent_node = current_node.parent; // TODO: Revise.
-                        current_node = nodes.addOneAssumeCapacity();
+                        // parent_node = current_node.parent; // TODO: Revise.
+                        // current_node = nodes.addOneAssumeCapacity();
                         state = .start;
                     },
                     else => {
@@ -664,6 +691,7 @@ test "state" {
                 if(!expectToken(token, .identifier)) {
                     break :main;
                 }
+                current_node = nodes.addOneAssumeCapacity();
                 current_node.* = DifNode {
                     .node_type = .Parameter,
                     .parent = parent_node,
@@ -672,6 +700,16 @@ test "state" {
                         .Parameter = .{}
                     }
                 };
+
+                if(prev_sibling) |actual_prev| {
+                    actual_prev.next_sibling = current_node;
+                } else if(parent_node) |parent| {
+                    // Att! any way to end up here without a parent set?
+                    parent.first_child = current_node;
+                }
+
+                prev_sibling = current_node;
+
                 parent_node = current_node;
                 token = tokenizer.nextToken();
                 if(!expectToken(token, .equal)) {
@@ -680,7 +718,7 @@ test "state" {
                 token = tokenizer.nextToken();
                 switch(token.typ) {
                     // must be any of the value-types
-                    .identifier => {
+                    .identifier,.string => {
                         current_node = nodes.addOneAssumeCapacity();
                         current_node.* = DifNode {
                             .node_type = .Value,
@@ -690,17 +728,8 @@ test "state" {
                                 .Value = .{}
                             }
                         };
-                    },
-                    .string => {
-                        current_node = nodes.addOneAssumeCapacity();
-                        current_node.* = DifNode {
-                            .node_type = .Value,
-                            .parent = parent_node,
-                            .name = token.slice,
-                            .data = .{
-                                .Value = .{}
-                            }
-                        };
+
+                        parent_node.?.first_child = current_node;
                     },
                     else => {
                         debug("FATAL: Expected value value-type, got: {s}\n", .{token.slice});
@@ -711,27 +740,41 @@ test "state" {
                 if(!expectToken(token, .eos)) {
                     break :main;
                 }
-                token = tokenizer.nextToken();
-                switch(token.typ) {
-                    .brace_end => {
-                        state = .start;
-                    },
-                    .identifier => {
-                        state = .data;
-                    },
-                    else => {
-                        debug("FATAL: Expected identifier or }}, got: {s}\n", .{token.slice});
-                        break :main;
-                    }
-                }
+                state = .data;
+                // token = tokenizer.nextToken();
+                // switch(token.typ) {
+                //     .brace_end => {
+                //         state = .start;
+                //     },
+                //     .identifier => {
+                //         state = .data;
+                //     },
+                //     else => {
+                //         debug("FATAL: Expected identifier or }}, got: {s}\n", .{token.slice});
+                //         break :main;
+                //     }
+                // }
             },
             else => {},
         }
     }
     debug("DONE\n", .{});
 
-    for(nodes.slice()) |node| {
-        debug("parsed: {s}: {s}\n", .{node.node_type, node.name});
+    dumpDifAst(&nodes.slice()[0], 0);
+
+    // for(nodes.slice()) |node| {
+    //     debug("parsed: {s}: {s}\n", .{node.node_type, node.name});
+    // }
+}
+
+fn dumpDifAst(node: *DifNode, level: u8) void {
+    debug("{d} {s}: {s}\n", .{level, @tagName(node.node_type), node.name});
+    if(node.first_child) |child| {
+        dumpDifAst(child, level+1);
+    }
+
+    if(node.next_sibling) |next| {
+        dumpDifAst(next, level);
     }
 }
 
@@ -815,7 +858,7 @@ test "Dififier" {
                 }
                 debug("got edge: {s}\n", .{tokenizer.nextToken().slice});
             },
-            .identifer => {
+            .identifier => {
 
             },
             .equal => {
