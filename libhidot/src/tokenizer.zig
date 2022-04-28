@@ -150,7 +150,7 @@ pub const Tokenizer = struct {
                         },
                         else => {
                             // Error
-
+                            utils.parseError(self.buf, self.pos, "Unexpected character '{}'", .{c});
                         },
                     }
                 },
@@ -356,7 +356,7 @@ pub fn dump(buf: []const u8) void {
     while (true) : (i+=1) {
         var token = tokenizer.nextToken();
         var start = utils.idxToLineCol(buf[0..], token.start);
-        debug("token[{d:0>2}] ({d:0>2}:{d:0>2}): {s:<16} -> {s}\n", .{i, start.l, start.c, @tagName(token.typ), token.slice});
+        debug("token[{d:0>2}] ({d:0>2}:{d:0>2}): {s:<16} -> {s}\n", .{i, start.line, start.col, @tagName(token.typ), token.slice});
         if(token.typ == .eof) break;
     }
 }
@@ -393,7 +393,7 @@ test "tokenize exploration 2" {
     while (true) : (i+=1) {
         var token = tokenizer.nextToken();
         var start = utils.idxToLineCol(buf[0..], token.start);
-        debug("token[{d:2}] ({d:2}:{d:2}): {} -> {s}\n", .{i, start.l, start.c, token.typ, token.slice});
+        debug("token[{d:2}] ({d:2}:{d:2}): {} -> {s}\n", .{i, start.line, start.col, token.typ, token.slice});
         if(token.typ == .eof) break;
     }
 }

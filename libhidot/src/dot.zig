@@ -39,8 +39,8 @@ test "writeNodeFields" {
     var source = 
         \\node MyNode {
         \\    label: "My label"
-        \\    color: #000000
-        \\    background: #FF0000
+        \\    color: #000000
+        \\    background: #FF0000
         \\}
         \\Node: MyNode
         \\
@@ -105,8 +105,8 @@ test "writeRelationshipFields" {
         \\node MyNode {}
         \\edge Uses {
         \\    label: "Edge label"
-        \\    sourceSymbol: arrow_filled
-        \\    targetSymbol: arrow_open
+        \\    sourceSymbol: arrow_filled
+        \\    targetSymbol: arrow_open
         \\}
         \\NodeA: MyNode
         \\NodeB: MyNode
