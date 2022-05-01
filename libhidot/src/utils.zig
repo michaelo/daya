@@ -45,10 +45,16 @@ test "idxToLineCol" {
 pub fn parseError(src: []const u8, start_idx: usize, comptime fmt: []const u8, args: anytype) void {
     const print = std.io.getStdOut().writer().print;
     var lc = idxToLineCol(src, start_idx);
-    print("PARSE ERROR ({d}:{d}):", .{lc.line, lc.col}) catch {};
+    print("PARSE ERROR ({d}:{d}): ", .{lc.line, lc.col}) catch {};
     print(fmt, args) catch {};
     print("\n", .{}) catch {};
     dumpSrcChunkRef(src, start_idx);
+    print("\n", .{}) catch {};
+    var i: usize = 0;
+    if(lc.col > 0) while(i<lc.col-1): (i+=1) {
+        print(" ", .{}) catch {};
+    };
+    print("^\n", .{}) catch {};
 }
 
 pub fn dumpSrcChunkRef(src: []const u8, start_idx: usize) void {

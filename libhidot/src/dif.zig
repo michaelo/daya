@@ -540,6 +540,7 @@ test "state" {
         \\  label="contains for realz";
         \\  color="black";
         \\}
+        \\edge owns;
         \\
         \\group Components {
         \\    group LibComponents {
@@ -584,9 +585,10 @@ test "state" {
                         // break :main_inner;
                     },
 
-                    // .keyword_node => {
-
-                    // },
+                    .keyword_node => {
+                        debug("start, found node\n", .{});
+                        state = DififierState.kwnode;
+                    },
 
                     // .keyword_layout => {
 
@@ -599,7 +601,9 @@ test "state" {
                     // .keyword_group => {
 
                     // },
-                    else => {}
+                    else => {
+                        utils.parseError(buf, token.start, "Unexpected token type '{s}'", .{@tagName(token.typ)});
+                    }
                 }
             },
             // Edge parsing
@@ -647,20 +651,58 @@ test "state" {
                     }
                 }
             },
+
+            // Node parsing
+            .kwnode => {
+                debug("Adding node\n", .{});
+                current_node = nodes.addOneAssumeCapacity();
+
+                // Expect identifier
+                token = tokenizer.nextToken();
+                if(token.typ != .identifier) {
+                    debug("FATAL: 1 Expected identifier, got: {s}\n", .{token.slice});
+                    break :main;
+                }
+
+                current_node.* = DifNode{
+                    .node_type = .Node,
+                    .parent = parent_node,
+                    .name = token.slice,
+                    .data = .{
+                        .Node = .{}
+                    }
+                };
+
+                if(prev_sibling) |actual_prev| {
+                    actual_prev.next_sibling = current_node;
+                } else if(parent_node) |parent| {
+                    // Att! any way to end up here without a parent set?
+                    parent.first_child = current_node;
+                }
+
+                prev_sibling = current_node;
+        
+                token = tokenizer.nextToken();
+                switch(token.typ) {
+                    .eos => {
+                        state = .start;
+                    },
+                    .brace_start =>  {
+                        state = .data;
+                        prev_sibling = null; // following (possible) parameter is then first child
+                    },
+                    else => {
+                        debug("FATAL: Expected ; or {{, got: {s}\n", .{token.slice});
+                        break :main;
+                    }
+                }
+            },
+
             .data => {
                 parent_node = current_node;
                 // First parameter is child of "parent"
                 // TODO: Following parameters are next_sibling to the previous one
-                
-                // current_node = nodes.addOneAssumeCapacity();
-                // current_node.* = DifNode {
-                //     .node_type = .Group,
-                //     .parent = parent_node,
-                //     .data = .{
-                //         .Group = .{}
-                //     }
-                // };
-                // debug("data: {s}\n", .{token.typ});
+
                 token = tokenizer.nextToken();
                 switch(token.typ) {
                     .identifier => {
@@ -674,7 +716,7 @@ test "state" {
                         state = .start;
                     },
                     else => {
-                        debug("FATAL: Expected identifier or }}, got: {s} -> {s}\n", .{@tagName(token.typ), token.slice});
+                        utils.parseError(buf, token.start, "Expected identifier or }}, got {s}: {s}\n", .{@tagName(token.typ), token.slice});
                         break :main;
                     }
                 }
@@ -732,7 +774,7 @@ test "state" {
                         parent_node.?.first_child = current_node;
                     },
                     else => {
-                        debug("FATAL: Expected value value-type, got: {s}\n", .{token.slice});
+                        utils.parseError(buf, token.start, "Expected value-type, got: {s}\n", .{token.slice});
                         break :main;
                     }
                 }
@@ -740,6 +782,7 @@ test "state" {
                 if(!expectToken(token, .eos)) {
                     break :main;
                 }
+                // parent_node = parent_node.?.parent;
                 state = .data;
                 // token = tokenizer.nextToken();
                 // switch(token.typ) {
@@ -755,7 +798,9 @@ test "state" {
                 //     }
                 // }
             },
-            else => {},
+            else => {
+                
+            },
         }
     }
     debug("DONE\n", .{});
