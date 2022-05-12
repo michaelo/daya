@@ -11,6 +11,10 @@ const debug = std.debug.print;
 const testing = std.testing;
 
 const initBoundedArray = utils.initBoundedArray;
+
+const ParseError = error {
+    UnexpectedToken
+};
 // test
 
 /// ...
@@ -477,9 +481,7 @@ test "expectDifNodes" {
 const DifNodeWIP = struct {};
 
 /// TODO: Experimental
-/// TODO: Pass in state?
-/// TODO: Parse all siblings pr generation, then recurse by level?
-fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) void {
+fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
     var state: DififierState = .start;
 
     var prev_sibling: ?*DifNode = null;
@@ -487,7 +489,7 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
     var tok: Token = undefined;
     main: while (true) {
         // if (token.typ == .eof) break;
-        debug("state: {s}\n", .{@tagName(state)});
+        // debug("state: {s}\n", .{@tagName(state)});
 
         switch (state) {
             .start => {
@@ -504,7 +506,7 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
                         // Go back...
                         break :main;
                     },
-                    // TODO: identifier can be relevant for either instantiation or key/value. Need a proper outer parse-state-handler
+                    // TODO: identifier can be relevant for either instantiation or key/value.
                     .identifier => {
                         state = .definition;
                         // identifier + colon + identifier = instantiations
@@ -524,12 +526,15 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
                             }
                         }
 
-                        // TODO: Split to different states?
+                        // TBD: Split to different states?
 
                         // Get label
                         var initial_token = tok;
                         tok = tokenizer.nextToken();
-                        assert(tok.typ == .identifier);
+                        if(tok.typ != .identifier) {
+                            utils.parseError(tokenizer.buf, tok.start, "Expected identifier, got token type '{s}'", .{@tagName(tok.typ)});
+                            return error.UnexpectedToken;
+                        }
 
                         node.* =  switch(initial_token.typ) {
                             .keyword_edge => DifNode{
@@ -572,17 +577,18 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
                             },
                             .brace_start => {
                                 // Recurse
-                                debug("recurse\n", .{});
-                                parseTreeRecursive(MaxNodes, nodePool, tokenizer, node);
+                                try parseTreeRecursive(MaxNodes, nodePool, tokenizer, node);
                             },
                             else => {
                                 utils.parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}', expected {{ or ;", .{@tagName(tok.typ)});
+                                return error.UnexpectedToken;
                             },// invalid
                         }
                         state = .start;
                     },
                     else => {
                         utils.parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}'", .{@tagName(tok.typ)});
+                        return error.UnexpectedToken;
                     },
                 }
             },
@@ -654,6 +660,7 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
                     else => {
                         // TODO: Parse error.
                         utils.parseError(tokenizer.buf, token2.start, "Unexpected token type '{s}', expected =, : or an identifier", .{@tagName(token2.typ)});
+                        return error.UnexpectedToken;
                     } // invalid
                 }
 
@@ -667,12 +674,11 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
                 
                 switch(token4.typ) {
                     .eos => {
-                        debug("Got end of statement\n", .{});
+                        // debug("Got end of statement\n", .{});
                         // state = .start;
                     },
                     .brace_start => {
-                        debug("Got children section\n", .{});
-                        parseTreeRecursive(MaxNodes, nodePool, tokenizer, node);
+                        try parseTreeRecursive(MaxNodes, nodePool, tokenizer, node);
                     },
                     // TODO: treat } also as an eos?
                     // .brace_end => {
@@ -681,6 +687,7 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
                     else => {
                         // debug("Expected end or sub, got; {s}\n", .{token4.typ});
                         utils.parseError(tokenizer.buf, token4.start, "Unexpected token type '{s}', expected ; or {{", .{@tagName(token4.typ)});
+                        return error.UnexpectedToken;
                     } // invalid
                 }
                 state = .start;
@@ -689,21 +696,24 @@ fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifN
             else => {
                 
             }
-            // .got_identifier => {
-
-            // }
         }
     }
+}
+
+fn parseAndDump(buf: []const u8) void {
+    tokenizerDump(buf);
+    var tokenizer = Tokenizer.init(buf[0..]);
+    var nodePool = initBoundedArray(DifNode, 1024);
+    parseTreeRecursive(1024, &nodePool, &tokenizer, null) catch {
+        debug("Got error parsing\n", .{});
+    };
+    dumpDifAst(&nodePool.slice()[0], 0);
 }
 
 test "parseTreeRecursive" {
     {
         const buf = "edge owns;";
-        tokenizerDump(buf);
-        var tokenizer = Tokenizer.init(buf[0..]);
-        var nodePool = initBoundedArray(DifNode, 1024);
-        parseTreeRecursive(1024, &nodePool, &tokenizer, null);
-        dumpDifAst(&nodePool.slice()[0], 0);
+        parseAndDump(buf[0..]);
     }
 
     {
@@ -711,26 +721,50 @@ test "parseTreeRecursive" {
             \\edge owns_with_label { label="my label"; }
             \\edge owns_with_empty_set { }
         ;
-        tokenizerDump(buf);
-        var tokenizer = Tokenizer.init(buf[0..]);
-        var nodePool = initBoundedArray(DifNode, 1024);
-        parseTreeRecursive(1024, &nodePool, &tokenizer, null);
-        dumpDifAst(&nodePool.slice()[0], 0);
+        parseAndDump(buf[0..]);
     }
 
     {
         const buf =
             \\node Component { label="my label"; }
         ;
-        tokenizerDump(buf);
-        var tokenizer = Tokenizer.init(buf[0..]);
-        var nodePool = initBoundedArray(DifNode, 1024);
-        parseTreeRecursive(1024, &nodePool, &tokenizer, null);
-        dumpDifAst(&nodePool.slice()[0], 0);
+        parseAndDump(buf[0..]);
+    }
+
+
+    {
+        const buf =
+            \\//Definitions
+            \\node Component { label="<Component>"; }
+            \\node Actor { label="<Actor>"; }
+            \\edge uses { label="uses"; }
+            \\
+            \\// Groups / instantiations
+            \\group Externals {
+            \\  user: Actor { label="User"; };
+            \\}
+            \\group App {
+            \\  label="My app";
+            \\  group Interfaces {
+            \\    cli: Component;
+            \\  }
+            \\
+            \\  group Internals {
+            \\    core: Component;
+            \\  }
+            \\}
+            \\layer Main {
+            \\  user uses cli;
+            \\  cli uses core;
+            \\}
+            \\
+        ;
+        parseAndDump(buf[0..]);
     }
 
     // TODO: Start testing vertical slices of entire functionality  with new structure
     // Test: A node type, an edge type, two instantiations and a relationship between them
+    // TODO: Determine the valid attributes for nodes and edges. Determine how overrides shall be done. E.g concats of labels vs replacements.
 }
 
 const Dififier = struct {
@@ -782,6 +816,7 @@ test "state" {
         \\edge owns;
         \\
         \\group Components {
+        \\    
         \\    group LibComponents {
         \\        LibCompA: Component;
         \\        LibCompB: Component;
