@@ -314,18 +314,28 @@ const DififierState = enum {
     definition, // Common type for any non-keyword-definition
 };
 
+/// Entry-function to module. Returns reference to first top-level node in graph
+/// TODO: Implement support for a dynamicly allocatable nodepool
+pub fn tokensToDif(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer) !*DifNode {
+    parseTokensRecursively(MaxNodes, nodePool, tokenizer, null) catch {
+        return error.ParseError;
+    };
 
-/// TODO: Experimental
-pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
+    if(nodePool.slice().len < 1) {
+        return error.NothingFound;
+    }
+
+    return &nodePool.slice()[0];
+}
+
+/// TODO: Experimental.
+pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
     var state: DififierState = .start;
 
     var prev_sibling: ?*DifNode = null;
 
     var tok: Token = undefined;
     main: while (true) {
-        // if (token.typ == .eof) break;
-        // debug("state: {s}\n", .{@tagName(state)});
-
         switch (state) {
             .start => {
                 tok = tokenizer.nextToken();
@@ -335,18 +345,14 @@ pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(
                     },
                     .eos => {
                         state = .start;
-                        // continue :main;
                     },
                     .brace_end => {
-                        // Go back...
+                        // backing up, backing up...
                         break :main;
                     },
-                    // TODO: identifier can be relevant for either instantiation or key/value.
                     .identifier => {
+                        // identifier can be relevant for either instantiation, relationship or key/value.
                         state = .definition;
-                        // identifier + colon + identifier = instantiations
-                        // identifier + equal + identifier / string = key/value
-                        // identifier + identifier + identifier = relationship
                     },
                     .keyword_edge, .keyword_node, .keyword_layer, .keyword_group => {
                         
@@ -406,18 +412,15 @@ pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(
 
                         tok = tokenizer.nextToken();
                         switch (tok.typ) {
-                            .eos => {
-                                // state = .start;
-                                // break :main;
-                            },
+                            .eos => {},
                             .brace_start => {
                                 // Recurse
-                                try parseTreeRecursive(MaxNodes, nodePool, tokenizer, node);
+                                try parseTokensRecursively(MaxNodes, nodePool, tokenizer, node);
                             },
                             else => {
                                 utils.parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}', expected {{ or ;", .{@tagName(tok.typ)});
                                 return error.UnexpectedToken;
-                            },// invalid
+                            },
                         }
                         state = .start;
                     },
@@ -428,11 +431,11 @@ pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(
                 }
             },
             .definition => {
-                // TODO: Check for either instantiation, key/value or relationship
-                // instantiation: identifier colon identifier + ; or {}
-                // key/value: identifier equal identifier/string + ;
-                // relationship: identifier identifier identifier + ; or {}
-                // TODO: Att! These can be followed by either ; or {  (e.g. can contain children-set)
+                // Check for either instantiation, key/value or relationship
+                // instantiation: identifier   colon    identifier        + ; or {}
+                // key/value    : identifier   equal    identifier/string + ;
+                // relationship : identifier identifier identifier        + ; or {}
+                // Att! These can be followed by either ; or {  (e.g. can contain children-set), if so; recurse
                 
                 var token1 = tok;
                 assert(token1.typ == .identifier);
@@ -458,6 +461,7 @@ pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(
                             .parent = parent,
                             .data = .{
                                 .Value = .{
+                                    // TODO: Currently assuming single-token value for simplicity. This will likely not be the case for e.g. numbers with units
                                     .value = token3.slice,
                                 },
                             }
@@ -493,7 +497,6 @@ pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(
                         };
                     },
                     else => {
-                        // TODO: Parse error.
                         utils.parseError(tokenizer.buf, token2.start, "Unexpected token type '{s}', expected =, : or an identifier", .{@tagName(token2.typ)});
                         return error.UnexpectedToken;
                     } // invalid
@@ -508,19 +511,14 @@ pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(
                 var token4 = tokenizer.nextToken();
                 
                 switch(token4.typ) {
+                    // TBD: treat } also as an eos?
+                    // .brace_end
                     .eos => {
-                        // debug("Got end of statement\n", .{});
-                        // state = .start;
                     },
                     .brace_start => {
-                        try parseTreeRecursive(MaxNodes, nodePool, tokenizer, node);
+                        try parseTokensRecursively(MaxNodes, nodePool, tokenizer, node);
                     },
-                    // TODO: treat } also as an eos?
-                    // .brace_end => {
-
-                    // },
                     else => {
-                        // debug("Expected end or sub, got; {s}\n", .{token4.typ});
                         utils.parseError(tokenizer.buf, token4.start, "Unexpected token type '{s}', expected ; or {{", .{@tagName(token4.typ)});
                         return error.UnexpectedToken;
                     } // invalid
@@ -536,15 +534,7 @@ pub fn parseTreeRecursive(comptime MaxNodes: usize, nodePool: *std.BoundedArray(
 }
 
 
-fn expectToken(token: Token, tokenType: TokenType) bool {
-    if (token.typ != tokenType) {
-        debug("ERROR: Expected token-type {s}, got {s}: {s}\n", .{ tokenType, token.typ, token.slice });
-        return false;
-    }
-    return true;
-}
-
-
+// test/debug
 fn dumpDifAst(node: *DifNode, level: u8) void {
     debug("{d} {s}: {s}\n", .{ level, @tagName(node.node_type), node.name });
     if (node.first_child) |child| {
@@ -556,19 +546,19 @@ fn dumpDifAst(node: *DifNode, level: u8) void {
     }
 }
 
-
+// test/debug
 fn parseAndDump(buf: []const u8) void {
     tokenizerDump(buf);
     var tokenizer = Tokenizer.init(buf[0..]);
     var nodePool = initBoundedArray(DifNode, 1024);
 
-    parseTreeRecursive(1024, &nodePool, &tokenizer, null) catch {
+    parseTokensRecursively(1024, &nodePool, &tokenizer, null) catch {
         debug("Got error parsing\n", .{});
     };
     dumpDifAst(&nodePool.slice()[0], 0);
 }
 
-test "parseTreeRecursive" {
+test "parseTokensRecursively" {
     {
         const buf = "edge owns;";
         parseAndDump(buf[0..]);
@@ -659,4 +649,172 @@ test "parseTreeRecursive" {
     // TODO: Start testing vertical slices of entire functionality  with new structure
     // Test: A node type, an edge type, two instantiations and a relationship between them
     // TODO: Determine the valid attributes for nodes and edges. Determine how overrides shall be done. E.g concats of labels vs replacements.
+}
+
+const DifNodeMap = std.StringHashMap(*DifNode);
+
+test "Map" {
+    var map = std.StringHashMap([]const u8).init(testing.allocator);
+    defer map.deinit();
+    try map.put("key", "value");
+    debug("key: {s}\n", .{map.get("key")});
+    debug("key2: {s}\n", .{map.get("key2")});
+}
+
+fn findAllEdgesAndNodes(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap) error{OutOfMemory}!void {
+    switch(node.node_type) {
+        .Node => {
+            try nodeMap.put(node.name.?, node);
+        },
+        .Edge => {
+            try edgeMap.put(node.name.?, node);
+        },
+        else => {}
+    }
+    
+    if (node.first_child) |child| {
+        try findAllEdgesAndNodes(child, nodeMap, edgeMap);
+    }
+
+    if (node.next_sibling) |next| {
+        try findAllEdgesAndNodes(next, nodeMap, edgeMap);
+    }
+}
+
+// fn renderNode() void {
+//     // check node and immediate children
+// }
+
+const RenderError = error {
+    NoSuchNode,
+    NoSuchEdge,
+    OutOfMemory
+};
+
+// TODO: Extract the relevant, valid fields from base-node to use in instantiations
+// fn getNodeFields(instance: *DifNode, label: ?*[]const u8, fgcolor: ?*[]const u8) void {
+
+// }
+// 
+
+fn renderInstantiation(instance: *DifNode, nodeMap: *DifNodeMap) RenderError!void {
+    const w = debug;
+    var label = instance.name;
+    var nodeName = instance.data.Instantiation.target;
+
+    // label: default name of instance + label of node type
+    //        if children: look for label there and replace instance.name if found
+
+    var node = nodeMap.get(nodeName) orelse {
+        w("ERROR: No node {s} found\n", .{nodeName});
+        return RenderError.NoSuchNode;
+    };
+    _ = node;
+
+    // Extract relevant fields from immediate children: label, fgcolor, bgcolor, edge, shape
+    // TODO: Fault on detected grandchildren? No, this should be solved elsewhere...
+
+    // Extract fields from node
+    
+    w("    \"{s}\"[label=\"{s}\"];\n", .{instance.name, label});
+    
+    // compose a node by instance name, instance type(node), + immediate children-values, if any.
+
+}
+
+// fn renderEdge() void {
+//     // Takes both edge-ref and (optional) children-ref
+// }
+
+fn renderRelationship(instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap) RenderError!void {
+    _ = instance;
+    _ = nodeMap;
+    _ = edgeMap;
+}
+
+/// Recursive?
+fn renderGeneration(instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap) RenderError!void {
+    const w = debug;
+
+    // TODO: Are there any dot-requirements re ordering? E.g. can we e..g define a relationship, then describe the nodes?
+    switch(instance.node_type) {
+        .Instantiation => {
+            try renderInstantiation(instance, nodeMap);
+        },
+        .Relationship => {
+            try renderRelationship(instance, nodeMap, edgeMap);
+        },
+        .Group => {
+            w("subgraph cluster_{s} {{\n", .{instance.name});
+            if(instance.first_child) |child| {
+                try renderGeneration(child, nodeMap, edgeMap);
+            }
+            w("}}\n", .{});
+        },
+        else => {}
+    }
+
+    // if (node.first_child) |child| {
+    //     try findAllEdgesAndNodes(child, nodeMap, edgeMap);
+    // }
+
+    if (instance.next_sibling) |next| {
+        try renderGeneration(next, nodeMap, edgeMap);
+    }
+}
+
+fn experimentalDotWriter(rootNode: *DifNode) !void {
+    const w = debug;
+    _ = rootNode;
+
+    // TODO: Currently no scoping of node-types
+    var nodeMap = DifNodeMap.init(testing.allocator);
+    defer nodeMap.deinit();
+
+    var edgeMap = DifNodeMap.init(testing.allocator);
+    defer edgeMap.deinit();
+
+    try findAllEdgesAndNodes(rootNode, &nodeMap, &edgeMap);
+
+    // TODO: Need to find all nodes (TBD: scoped by groups?)
+    // TODO: Need to find all edges (global)
+    // Then, instantiate by group
+    // Relationships can be defined at last? At least if there's no scoping-concerns for DOT
+    // w("hello: {s}!\n", .{rootNode.name});
+    w("strict digraph {{\n", .{});
+
+    // TODO: Implement "include"-support
+
+
+    // var nodeI = nodeMap.iterator();
+    // while(nodeI.next()) |node| {
+    //     w("node: {s}\n", .{node.key_ptr.*});
+    // }
+    try renderGeneration(rootNode, &nodeMap, &edgeMap);
+    
+    // remove, edges are looked up on demand: TODO: Generate predefined strings? or what about when overridden?
+    // var edgeI = edgeMap.iterator();
+    // while(edgeI.next()) |edge| {
+    //     w("edge: {s}\n", .{edge.key_ptr.*});
+    // }
+
+
+    w("}}\n", .{});
+}
+
+test "dotifier exploration" {
+    // Exploration
+    const buf = 
+        \\node Component;
+        \\edge owns;
+        \\group Silly {
+        \\compA: Component;
+        \\compB: Component;
+        \\}
+        \\compA owns compB;
+    ;
+    var tokenizer = Tokenizer.init(buf[0..]);
+    var nodePool = initBoundedArray(DifNode, 1024);
+    var rootNode = try tokensToDif(1024, &nodePool, &tokenizer);
+    try experimentalDotWriter(rootNode);
 }

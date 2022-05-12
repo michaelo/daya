@@ -23,7 +23,6 @@ const debug = std.debug.print;
 pub fn hidotToDot(comptime Writer: type, buf: []const u8, writer: Writer) !void {
     var tokens_buf = initBoundedArray(Token, 1024);
     try tokens_buf.resize(try tokenizer.tokenize(buf, tokens_buf.unusedCapacitySlice()));
-    // dumpTokens(buf);
     var mydif = dif.Dif{};
     try dif.tokensToDif(tokens_buf.slice(), &mydif);
     try dot.difToDot(Writer, &mydif, writer);

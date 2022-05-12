@@ -23,7 +23,6 @@ pub const TokenType = enum {
     invalid,
     eof,
     eos,
-    nl,
     value,
     keyword_node,
     keyword_edge,
@@ -137,13 +136,6 @@ pub const Tokenizer = struct {
                             result.end = self.pos;
                             break;
                         },
-                        // TBD: Any semantic use for newlines, or simply treat it like any space? Will then need another separator, e.g. ;
-                        // '\n' => {
-                        //     result.typ = .nl;
-                        //     self.pos += 1;
-                        //     result.end = self.pos;
-                        //     break;
-                        // },
                         // Whitespace are separators
                         ' ', '\t', '\n' => {
                             result.start = self.pos + 1;
@@ -236,16 +228,6 @@ pub const Tokenizer = struct {
     }
 };
 
-fn dumpTokens(buf: []const u8) void {
-    var tokenizer = Tokenizer.init(buf);
-    while (true) {
-        var token = tokenizer.nextToken();
-        if (token.typ == .eof) break;
-
-        debug("{d}-{d} - {s}: '{s}'\n", .{ token.start, token.end, token.typ, buf[token.start..token.end] });
-    }
-}
-
 fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
     var tokenizer = Tokenizer.init(buf);
 
@@ -283,7 +265,6 @@ test "tokenize exploration" {
         \\
     ;
 
-    // dumpTokens(buf);
     try expectTokens(buf, &[_]TokenType{
         // node Module {...}
         .keyword_node,
@@ -386,15 +367,7 @@ test "tokenize exploration 2" {
         \\
     ;
 
-    var tokenizer = Tokenizer.init(buf);
-    var i: usize = 0;
-    
-    while (true) : (i+=1) {
-        var token = tokenizer.nextToken();
-        var start = utils.idxToLineCol(buf[0..], token.start);
-        debug("token[{d:2}] ({d:2}:{d:2}): {} -> {s}\n", .{i, start.line, start.col, token.typ, token.slice});
-        if(token.typ == .eof) break;
-    }
+    dump(buf[0..]);
 }
 
 // Adds tokens to tokens_out and returns number of tokens found/added
@@ -414,5 +387,3 @@ pub fn tokenize(buf: []const u8, tokens_out: []Token) !usize {
 
     return tok_idx;
 }
-
-
