@@ -153,55 +153,6 @@ pub const EdgeEndStyle = enum {
     }
 };
 
-// Parse strategy:
-// Can create a variant of the tokanizer, but working on the tokens. Then have a struct/union based on a Type-enum (Definition (node, edge), Instantiation (MyObj: SomeNode), Property (key:value), Relation (<nodeinstance> <edgetype> <nodeinstance>)
-// Can be run nested as well?
-
-/// Take the tokenized input and parse/convert it to the internal format
-/// We don't need/use a full AST (in the PL-form), but we need to parse to an internal format we can work with
-/// Get the following complete block of tokens as identified by braces. Assumes first entry is a brace_start
-
-fn parseLabel(tokens: []const Token) []const u8 {
-    assert(tokens.len > 2);
-    assert(tokens[1].typ == .colon);
-    assert(tokens[2].typ == .string);
-    return tokens[2].slice;
-}
-
-fn parseColor(tokens: []const Token) []const u8 {
-    assert(tokens.len > 2);
-    assert(tokens[1].typ == .colon);
-    assert(tokens[2].typ == .identifier);
-    // assert(tokens[2].typ == .hash_color);
-    // return Color.fromHexstring(tokens[2].slice);
-    return tokens[2].slice;
-}
-
-// TODO: Delete/replace
-fn parseNodeDefinition(name: []const u8, tokens: []const Token) !NodeDefinition {
-    var result = NodeDefinition{
-        .name = name,
-    };
-
-    // TODO: Iterate over tokens to find properties
-    // now: label, shape
-    // later: bgcolor, fgcolor, border, ...
-    var idx: usize = 0;
-    while (idx < tokens.len) : (idx += 1) {
-        // Assume identifier, colon, then some kind of value
-        const token = tokens[idx];
-        if (std.mem.eql(u8, token.slice, "label")) {
-            result.label = parseLabel(tokens[idx .. idx + 3]);
-        } else if (std.mem.eql(u8, token.slice, "shape")) {
-            result.shape = try parseNodeShape(tokens[idx .. idx + 3]);
-        } else if (std.mem.eql(u8, token.slice, "color")) {
-            result.fg_color = parseColor(tokens[idx .. idx + 3]);
-        } else if (std.mem.eql(u8, token.slice, "background")) {
-            result.bg_color = parseColor(tokens[idx .. idx + 3]);
-        }
-    }
-    return result;
-}
 
 // TODO: Delete/replace
 fn parseNodeShape(tokens: []const Token) !NodeShape {
@@ -227,36 +178,6 @@ fn parseEdgeEdgeEndStyle(tokens: []const Token) !EdgeEndStyle {
     return try EdgeEndStyle.fromString(tokens[2].slice);
 }
 
-// TODO: Delete/replace
-fn parseEdgeDefinition(name: []const u8, tokens: []const Token) !EdgeDefinition {
-    var result = EdgeDefinition{
-        .name = name,
-    };
-
-    // TODO: Iterate over tokens to find properties
-    // label, sourcearrow, endarrow...
-    var idx: usize = 0;
-    while (idx < tokens.len) : (idx += 1) {
-        // Not very safe - currently spins until it finds anything recognizable
-        const token = tokens[idx];
-        // debug("checking: {s}\n", .{token.slice});
-        if (std.mem.eql(u8, token.slice, "label")) {
-            result.label = parseLabel(tokens[idx .. idx + 3]);
-            idx += 3;
-        } else if (std.mem.eql(u8, token.slice, "style")) {
-            result.edge_style = try parseEdgeStyle(tokens[idx .. idx + 3]);
-            idx += 3;
-        } else if (std.mem.eql(u8, token.slice, "targetSymbol")) {
-            // debug("parsing targetSymbol\n", .{});
-            result.target_symbol = try parseEdgeEdgeEndStyle(tokens[idx .. idx + 3]);
-            idx += 3;
-        } else if (std.mem.eql(u8, token.slice, "sourceSymbol")) {
-            result.source_symbol = try parseEdgeEdgeEndStyle(tokens[idx .. idx + 3]);
-            idx += 3;
-        }
-    }
-    return result;
-}
 
 const DifNodeType = enum {
     Unknown,
@@ -485,7 +406,7 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                         // relationship
                         node.* = DifNode {
                             .node_type = .Relationship,
-                            .name = token1.slice,
+                            .name = token1.slice, // source... Otherwise create an ID here, and keep source, edge and target all in .data? (TODO)
                             .initial_token = token1,
                             .parent = parent,
                             .data = .{
@@ -627,7 +548,10 @@ test "parseTokensRecursively" {
             \\group Components {
             \\    
             \\    group LibComponents {
-            \\        LibCompA: Component;
+            \\        LibCompA: Component {
+            \\          label="test";
+            \\          shape="box";
+            \\        };
             \\        LibCompB: Component;
             \\    };
             \\    
@@ -661,7 +585,7 @@ test "Map" {
     debug("key2: {s}\n", .{map.get("key2")});
 }
 
-fn findAllEdgesAndNodes(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap) error{OutOfMemory}!void {
+fn findAllEdgesNodesAndInstances(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) error{OutOfMemory}!void {
     switch(node.node_type) {
         .Node => {
             try nodeMap.put(node.name.?, node);
@@ -669,15 +593,18 @@ fn findAllEdgesAndNodes(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeM
         .Edge => {
             try edgeMap.put(node.name.?, node);
         },
+        .Instantiation => {
+            try instanceMap.put(node.name.?, node);
+        },
         else => {}
     }
     
     if (node.first_child) |child| {
-        try findAllEdgesAndNodes(child, nodeMap, edgeMap);
+        try findAllEdgesNodesAndInstances(child, nodeMap, edgeMap, instanceMap);
     }
 
     if (node.next_sibling) |next| {
-        try findAllEdgesAndNodes(next, nodeMap, edgeMap);
+        try findAllEdgesNodesAndInstances(next, nodeMap, edgeMap, instanceMap);
     }
 }
 
@@ -686,20 +613,89 @@ fn findAllEdgesAndNodes(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeM
 // }
 
 const RenderError = error {
+    UnexpectedType,
     NoSuchNode,
     NoSuchEdge,
+    NoSuchInstance,
     OutOfMemory
 };
 
-// TODO: Extract the relevant, valid fields from base-node to use in instantiations
-// fn getNodeFields(instance: *DifNode, label: ?*[]const u8, fgcolor: ?*[]const u8) void {
+// TODO: Extract the relevant, valid fields for a node
 
-// }
-// 
+const NodeParams = struct {
+    label: ?[]const u8 = null,
+    bgcolor: ?[]const u8 = null,
+    shape: ?[]const u8 = null,
+};
+
+fn getNodeFieldsFromChildSet(first_sibling: *DifNode, result: *NodeParams) void {
+    var node = first_sibling;
+    while(true) {
+        // check node type: We're only looking for value-types
+        if(node.node_type != .Value) {
+            continue;
+        }
+
+        if(node.name) |param_name| {
+            if(std.mem.eql(u8, "label", param_name)) {
+                result.label = node.data.Value.value;
+            } else if(std.mem.eql(u8, "bgcolor", param_name)) {
+                result.bgcolor = node.data.Value.value;
+            } else if(std.mem.eql(u8, "shape", param_name)) {
+                result.shape = node.data.Value.value;
+            }
+        }
+
+        if(node.next_sibling) |next| {
+            node = next;
+        } else {
+            break;
+        }
+    }
+}
+
+pub const EdgeParams = struct {
+    label: ?[]const u8 = null,
+    // edge_style: ?EdgeStyle = EdgeStyle.solid,
+    // source_symbol: EdgeEndStyle = EdgeEndStyle.none,
+    // source_label: ?[]const u8 = null,
+    // target_symbol: EdgeEndStyle = EdgeEndStyle.arrow_open,
+    // target_label: ?[]const u8 = null,
+};
+
+fn getEdgeFieldsFromChildSet(first_sibling: *DifNode, result: *EdgeParams) void {
+    var node = first_sibling;
+    while(true) {
+        // check node type: We're only looking for value-types
+        if(node.node_type != .Value) {
+            continue;
+        }
+
+        if(node.name) |param_name| {
+            if(std.mem.eql(u8, "label", param_name)) {
+                result.label = node.data.Value.value;
+            }
+        }
+
+        if(node.next_sibling) |next| {
+            node = next;
+        } else {
+            break;
+        }
+    }
+}
+
 
 fn renderInstantiation(instance: *DifNode, nodeMap: *DifNodeMap) RenderError!void {
+    if(instance.node_type != .Instantiation) {
+        return RenderError.UnexpectedType;
+    }
+
     const w = debug;
-    var label = instance.name;
+
+    var instanceParams: NodeParams = .{};
+    var nodeParams: NodeParams = .{};
+
     var nodeName = instance.data.Instantiation.target;
 
     // label: default name of instance + label of node type
@@ -709,15 +705,53 @@ fn renderInstantiation(instance: *DifNode, nodeMap: *DifNodeMap) RenderError!voi
         w("ERROR: No node {s} found\n", .{nodeName});
         return RenderError.NoSuchNode;
     };
-    _ = node;
+    // TODO: Dilemma; all other fields but label are overrides - if we could solve that, then we could just let
+    //       both getNodeFieldsFromChildSet-calls take the same set according to presedence (node, then instantiation)
+    if(instance.first_child) |child| {
+        getNodeFieldsFromChildSet(child, &instanceParams);
+    }
+
+    if(node.first_child) |child| {
+        getNodeFieldsFromChildSet(child, &nodeParams);
+    }
+
+    var instanceLabel = instanceParams.label orelse instance.name; // child-label-attr, orelse .name
+    // var nodeLabel = nodeParams.label orelse 
 
     // Extract relevant fields from immediate children: label, fgcolor, bgcolor, edge, shape
     // TODO: Fault on detected grandchildren? No, this should be solved elsewhere...
 
     // Extract fields from node
     
-    w("    \"{s}\"[label=\"{s}\"];\n", .{instance.name, label});
+    // Print node name and start attr-list
+    w("    \"{s}\"[", .{instance.name});
+
+    // Compose label
+    w("label=\"{s}", .{instanceLabel});
+    if(node.name != null and node.name.?.len > 0) {
+        w("\n{s}", .{node.name});
+    }
+    w("\",", .{});
+
+    // Shape
+    // var maybe_shape = instanceParams.shape orelse nodeParams.shape orelse null;
+    if(instanceParams.shape orelse nodeParams.shape) |shape| {
+        w("shape=\"{s}\",", .{shape});
+    }
+
+    // Foreground
+
+
+    // Background
+    // var maybe_bgcolor = instanceParams.bgcolor orelse nodeParams.bgcolor orelse null;
+    if(instanceParams.bgcolor orelse nodeParams.bgcolor) |bgcolor| {
+        w("style=filled,bgcolor=\"{0s}\",fillcolor=\"{0s}\",", .{bgcolor});
+    }
+
+    // end attr-list/node
+    w("];\n", .{});
     
+
     // compose a node by instance name, instance type(node), + immediate children-values, if any.
 
 }
@@ -726,40 +760,80 @@ fn renderInstantiation(instance: *DifNode, nodeMap: *DifNodeMap) RenderError!voi
 //     // Takes both edge-ref and (optional) children-ref
 // }
 
-fn renderRelationship(instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap) RenderError!void {
-    _ = instance;
-    _ = nodeMap;
-    _ = edgeMap;
-}
-
-/// Recursive?
-fn renderGeneration(instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap) RenderError!void {
+fn renderRelationship(instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *DifNodeMap) RenderError!void {
     const w = debug;
 
-    // TODO: Are there any dot-requirements re ordering? E.g. can we e..g define a relationship, then describe the nodes?
+    if(instance.node_type != .Relationship) {
+        return RenderError.UnexpectedType;
+    }
+
+    var sourceNodeName = instance.name.?;
+    var edgeName = instance.data.Relationship.edge;
+    var targetNodeName = instance.data.Relationship.target;
+
+    var sourceNode = instanceMap.get(sourceNodeName) orelse {
+        return error.NoSuchInstance;
+    };
+
+    var targetNode = instanceMap.get(targetNodeName) orelse {
+        return error.NoSuchInstance;
+    };
+
+    var edge = edgeMap.get(edgeName) orelse {
+        return error.NoSuchEdge;
+    };
+
+    var instanceParams: EdgeParams = .{};
+    var edgeParams: EdgeParams = .{};
+
+    if(instance.first_child) |child| {
+        getEdgeFieldsFromChildSet(child, &instanceParams);
+    }
+
+    if(edge.first_child) |child| {
+        getEdgeFieldsFromChildSet(child, &edgeParams);
+    }
+
+    
+    w("{s} -> {s}[", .{sourceNode.name, targetNode.name});
+
+    // Label
+    var label = instanceParams.label orelse edgeParams.label orelse edge.name;
+    w("label=\"{s}\",", .{label});
+    // Style
+
+    // Start edge
+
+    // End edge
+
+    w("];\n", .{});
+
+
+}
+
+/// Recursive
+fn renderGeneration(instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) RenderError!void {
+    const w = debug;
+
     switch(instance.node_type) {
         .Instantiation => {
             try renderInstantiation(instance, nodeMap);
         },
         .Relationship => {
-            try renderRelationship(instance, nodeMap, edgeMap);
+            try renderRelationship(instance, instanceMap, edgeMap);
         },
         .Group => {
             w("subgraph cluster_{s} {{\n", .{instance.name});
             if(instance.first_child) |child| {
-                try renderGeneration(child, nodeMap, edgeMap);
+                try renderGeneration(child, nodeMap, edgeMap, instanceMap);
             }
             w("}}\n", .{});
         },
         else => {}
     }
 
-    // if (node.first_child) |child| {
-    //     try findAllEdgesAndNodes(child, nodeMap, edgeMap);
-    // }
-
     if (instance.next_sibling) |next| {
-        try renderGeneration(next, nodeMap, edgeMap);
+        try renderGeneration(next, nodeMap, edgeMap, instanceMap);
     }
 }
 
@@ -774,7 +848,10 @@ fn experimentalDotWriter(rootNode: *DifNode) !void {
     var edgeMap = DifNodeMap.init(testing.allocator);
     defer edgeMap.deinit();
 
-    try findAllEdgesAndNodes(rootNode, &nodeMap, &edgeMap);
+    var instanceMap = DifNodeMap.init(testing.allocator);
+    defer instanceMap.deinit();
+
+    try findAllEdgesNodesAndInstances(rootNode, &nodeMap, &edgeMap, &instanceMap);
 
     // TODO: Need to find all nodes (TBD: scoped by groups?)
     // TODO: Need to find all edges (global)
@@ -783,21 +860,8 @@ fn experimentalDotWriter(rootNode: *DifNode) !void {
     // w("hello: {s}!\n", .{rootNode.name});
     w("strict digraph {{\n", .{});
 
-    // TODO: Implement "include"-support
-
-
-    // var nodeI = nodeMap.iterator();
-    // while(nodeI.next()) |node| {
-    //     w("node: {s}\n", .{node.key_ptr.*});
-    // }
-    try renderGeneration(rootNode, &nodeMap, &edgeMap);
-    
-    // remove, edges are looked up on demand: TODO: Generate predefined strings? or what about when overridden?
-    // var edgeI = edgeMap.iterator();
-    // while(edgeI.next()) |edge| {
-    //     w("edge: {s}\n", .{edge.key_ptr.*});
-    // }
-
+    // TODO: Implement "include"-support? Enough to append to top node?
+    try renderGeneration(rootNode, &nodeMap, &edgeMap, &instanceMap);
 
     w("}}\n", .{});
 }
@@ -805,16 +869,22 @@ fn experimentalDotWriter(rootNode: *DifNode) !void {
 test "dotifier exploration" {
     // Exploration
     const buf = 
-        \\node Component;
+        \\node Component {
+        \\  bgcolor=green;  
+        \\};
         \\edge owns;
         \\group Silly {
         \\compA: Component;
-        \\compB: Component;
-        \\}
         \\compA owns compB;
+        \\compB: Component {
+        \\  bgcolor=blue;
+        \\  shape=box;
+        \\};
+        \\}
     ;
     var tokenizer = Tokenizer.init(buf[0..]);
     var nodePool = initBoundedArray(DifNode, 1024);
     var rootNode = try tokensToDif(1024, &nodePool, &tokenizer);
+    _ = rootNode;
     try experimentalDotWriter(rootNode);
 }
