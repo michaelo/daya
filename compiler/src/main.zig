@@ -20,7 +20,6 @@ const errors = error {
     ProcessError
 };
 
-
 const OutputFormat = enum {
     dot,
     png,
@@ -93,9 +92,9 @@ fn parseArgs(args: [][]const u8) !AppArgs {
 
     var scrap: [64]u8 = undefined;
 
-    var input_file: ?[]const u8 = null;
-    var output_file: ?[]const u8 = null;
-    var output_format: ?OutputFormat = null;
+    var maybe_input_file: ?[]const u8 = null;
+    var maybe_output_file: ?[]const u8 = null;
+    var maybe_output_format: ?OutputFormat = null;
 
     for (args) |arg| {
         // Flags
@@ -123,14 +122,14 @@ fn parseArgs(args: [][]const u8) !AppArgs {
         };
 
         if(std.mem.eql(u8, ext, "hidot")) {
-            input_file = arg[0..];
+            maybe_input_file = arg[0..];
             continue;
         }
 
         // Check for valid output-file
         if(std.meta.stringToEnum(OutputFormat, ext)) |format| {
-            output_file = arg[0..];
-            output_format = format;
+            maybe_output_file = arg[0..];
+            maybe_output_format = format;
             continue;
         }
 
@@ -138,26 +137,26 @@ fn parseArgs(args: [][]const u8) !AppArgs {
     }
 
     // Validate parsed args
-    if(input_file == null) {
+    var input_file = maybe_input_file orelse {
         debug("ERROR: Missing input file\n", .{});
         return error.NoInputFile;
-    }
+    };
 
-    if(output_file == null) {
+    var output_file = maybe_output_file orelse {
         debug("ERROR: Missing output file\n", .{});
         return error.NoOutputFile;
-    }
+    };
 
-    if(output_format == null) {
+    var output_format = maybe_output_format orelse {
         debug("ERROR: Unknown output format\n", .{});
         return error.NoOutputFormat;
-    }
+    };
 
     // Donaroo
     return AppArgs{
-        .input_file = input_file.?,
-        .output_file = output_file.?,
-        .output_format = output_format.?,
+        .input_file = input_file,
+        .output_file = output_file,
+        .output_format = output_format,
     };
 }
 
@@ -175,7 +174,6 @@ pub fn main() !void {
         return;
     };
 
-
     do(&parsedArgs) catch |e| switch(e) {
         errors.CouldNotReadInputFile => {
             debug("Could not read input-file: {s}\n", .{parsedArgs.input_file});
@@ -187,7 +185,7 @@ pub fn main() !void {
             debug("DEBUG: Unhandled error: {s}\n", .{e});
         }
     };
-    // debug("Got hidot: {s}\nGot ibhidot: {s}\n", .{APP_VERSION, hidot.LIB_VERSION});
+
     // Arguments:
     //   Input source (file or stdin)
     //   Output (file or stdout)
@@ -214,18 +212,19 @@ pub fn do(args: *AppArgs) errors!void {
 
     switch(args.output_format) {
         .dot => {
+            // Copy the temporary file as-is to output-path
             std.fs.cwd().copyFile(TEMPORARY_FILE, std.fs.cwd(), args.output_file, std.fs.CopyFileOptions{}) catch {
                 debug("ERROR: Could not create output file: {s}\n", .{args.output_file});
             };
         },
         .png, .svg => {
+            // Call external dot to convert
             callDot(TEMPORARY_FILE, args.output_file, args.output_format) catch |e| {
                 debug("ERROR: dot failed - {s}\n", .{e});
                 return errors.ProcessError;
             };
         },
     }
-    // Call external dot to convert
 }
 
 
@@ -245,15 +244,15 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
     var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch {
         return errors.ProcessError;
     };
-
     defer file.close();
-    _ = hidot.hidotToDot(std.fs.File.Writer, file.writer(), input_buffer.slice()) catch |e| {
+    
+    hidot.hidotToDot(std.fs.File.Writer, file.writer(), input_buffer.slice()) catch |e| {
         debug("ERROR: Got error from libhidot: {s}\n", .{e});
         return errors.ProcessError;
     };
 }
 
-
+// Launches a child process to call dot, assumes it's available in path
 fn callDot(input_file: []const u8, output_file: []const u8, output_format: OutputFormat) !void {
     var allocator = std.testing.allocator;
     var output_file_arg_buf: [1024]u8 = undefined;
@@ -268,7 +267,6 @@ fn callDot(input_file: []const u8, output_file: []const u8, output_format: Outpu
                                 }},
                                 .max_output_bytes = 128,
                             });
-    _ = result;
     
     defer {
         allocator.free(result.stderr);
@@ -284,10 +282,10 @@ fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {
     return try file.readAll(target_buf[0..]);
 }
 
+
 fn writeFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !void {
     var file = try base_dir.createFile(path, .{ .truncate = true });
     defer file.close();
 
     return try file.writeAll(target_buf[0..]);
 }
-

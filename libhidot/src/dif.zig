@@ -178,7 +178,6 @@ pub fn tokensToDif(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode
     return &nodePool.slice()[0];
 }
 
-/// TODO: Experimental.
 pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
     var state: DififierState = .start;
 
@@ -210,14 +209,11 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                         // If data-chunk follows; recurse and pass current node as parent
                         var node = nodePool.addOneAssumeCapacity();
 
-                        // TODO: Should most likely be refactored
                         if(parent) |realparent| {
                             if(realparent.first_child == null) {
                                 realparent.first_child = node;
                             }
                         }
-
-                        // TBD: Split to different states?
 
                         // Get label
                         var initial_token = tok;
@@ -294,7 +290,6 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
 
                 var node = nodePool.addOneAssumeCapacity();
 
-                // TODO: Should most likely be refactored
                 if(parent) |realparent| {
                     if(realparent.first_child == null) {
                         realparent.first_child = node;
@@ -352,7 +347,6 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                     } // invalid
                 }
 
-                // TODO: Verify correctness
                 if(prev_sibling) |prev| {
                     prev.next_sibling = node;
                 }
@@ -361,8 +355,7 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                 var token4 = tokenizer.nextToken();
                 
                 switch(token4.typ) {
-                    // TBD: treat } also as an eos?
-                    // .brace_end
+                    // .brace_end,
                     .eos => {
                     },
                     .brace_start => {
@@ -385,7 +378,7 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
 
 
 // test/debug
-fn dumpDifAst(node: *DifNode, level: u8) void {
+pub fn dumpDifAst(node: *DifNode, level: u8) void {
     debug("{d} {s}: {s}\n", .{ level, @tagName(node.node_type), node.name });
     if (node.first_child) |child| {
         dumpDifAst(child, level + 1);
@@ -499,7 +492,6 @@ test "parseTokensRecursively" {
         parseAndDump(buf[0..]);
     }
 
-    // TODO: Start testing vertical slices of entire functionality  with new structure
     // Test: A node type, an edge type, two instantiations and a relationship between them
     // TODO: Determine the valid attributes for nodes and edges. Determine how overrides shall be done. E.g concats of labels vs replacements.
 }

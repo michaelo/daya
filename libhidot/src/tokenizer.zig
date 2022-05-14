@@ -8,8 +8,8 @@ fn keywordOrIdentifier(value: []const u8) TokenType {
         return TokenType.keyword_node;
     } else if (std.mem.eql(u8, value, "edge")) {
         return TokenType.keyword_edge;
-    } else if (std.mem.eql(u8, value, "layout")) {
-        return TokenType.keyword_layout;
+    // } else if (std.mem.eql(u8, value, "layout")) {
+    //     return TokenType.keyword_layout;
     } else if (std.mem.eql(u8, value, "group")) {
         return TokenType.keyword_group;
     } else if (std.mem.eql(u8, value, "layer")) {
@@ -27,7 +27,7 @@ pub const TokenType = enum {
     keyword_node,
     keyword_edge,
     keyword_group,
-    keyword_layout,
+    // keyword_layout,
     keyword_layer,
     identifier,
     single_line_comment,
@@ -166,7 +166,7 @@ pub const Tokenizer = struct {
                         // 'a'...'z', 'A'...'Z', '0'...'9','_','-','<','>' => {},
                         '\n', '\t', ' ', '\r', ';', '{', '}', '(', ')', ':', '=' => {
                             result.end = self.pos;
-                            // TODO: Should we here have control if we're on lhs/rhs? Reserved leftside-keywords could be valid values
+                            // TBD: Should we here have control if we're on lhs/rhs? Reserved leftside-keywords could be valid values
                             result.typ = keywordOrIdentifier(self.buf[result.start..result.end]);
                             break;
                         },
@@ -184,11 +184,9 @@ pub const Tokenizer = struct {
                 },
                 .single_line_comment => {
                     // Spin until end of line
-                    // Currently ignoring comments
                     switch (c) {
                         '\n' => {
                             state = .start;
-                            // result.start = self.pos;
                         },
                         else => {},
                     }

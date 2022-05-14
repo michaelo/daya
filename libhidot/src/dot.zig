@@ -180,10 +180,11 @@ const EdgeParams = struct {
 
 const GroupParams = struct {
     label: ?[]const u8 = null,
+    layout: ?[]const u8 = null,
     bgcolor: ?[]const u8 = null,
 };
 
-fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) void {
+fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) !void {
     var node = first_sibling;
     while(true) {
         // check node type: We're only looking for value-types
@@ -202,6 +203,16 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
                     EdgeParams => {
                         if(std.mem.eql(u8, "label", param_name)) {
                             result.label = node.data.Value.value;
+                        } else if(std.mem.eql(u8, "edge_style", param_name)) {
+                            result.edge_style = try dif.EdgeStyle.fromString(node.data.Value.value);
+                        } else if(std.mem.eql(u8, "source_symbol", param_name)) {
+                            result.source_symbol = try dif.EdgeEndStyle.fromString(node.data.Value.value);
+                        } else if(std.mem.eql(u8, "target_symbol", param_name)) {
+                            result.target_symbol = try dif.EdgeEndStyle.fromString(node.data.Value.value);
+                        } else if(std.mem.eql(u8, "source_label", param_name)) {
+                            result.source_label = node.data.Value.value;
+                        } else if(std.mem.eql(u8, "target_label", param_name)) {
+                            result.target_label = node.data.Value.value;
                         }
                     },
                     GroupParams => {
@@ -209,6 +220,8 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
                             result.label = node.data.Value.value;
                         } else if(std.mem.eql(u8, "bgcolor", param_name)) {
                             result.bgcolor = node.data.Value.value;
+                        } else if(std.mem.eql(u8, "layout", param_name)) {
+                            result.layout = node.data.Value.value;
                         }
                     },
                     else => {
@@ -249,13 +262,11 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
     // TODO: Dilemma; all other fields but label are overrides - if we could solve that, then we could just let
     //       both getNodeFieldsFromChildSet-calls take the same set according to presedence (node, then instantiation)
     if(instance.first_child) |child| {
-        getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
-        // getNodeFieldsFromChildSet(child, &instanceParams);
+        try getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
     }
 
     if(node.first_child) |child| {
-        getFieldsFromChildSet(@TypeOf(nodeParams), child, &nodeParams);
-        // getNodeFieldsFromChildSet(child, &nodeParams);
+        try getFieldsFromChildSet(@TypeOf(nodeParams), child, &nodeParams);
     }
 
     var instanceLabel = instanceParams.label orelse instance.name; // child-label-attr, orelse .name
@@ -270,13 +281,12 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
 
     // Compose label
     try writer.print("label=\"{s}", .{instanceLabel});
-    if(node.name != null and node.name.?.len > 0) {
-        try writer.print("\n{s}", .{node.name});
+    if(nodeParams.label orelse node.name) |node_label| {
+        try writer.print("\n{s}", .{node_label});
     }
     try writer.print("\",", .{});
 
     // Shape
-    // var maybe_shape = instanceParams.shape orelse nodeParams.shape orelse null;
     if(instanceParams.shape orelse nodeParams.shape) |shape| {
         try writer.print("shape=\"{s}\",", .{shape});
     }
@@ -285,7 +295,6 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
 
 
     // Background
-    // var maybe_bgcolor = instanceParams.bgcolor orelse nodeParams.bgcolor orelse null;
     if(instanceParams.bgcolor orelse nodeParams.bgcolor) |bgcolor| {
         try writer.print("style=filled,bgcolor=\"{0s}\",fillcolor=\"{0s}\",", .{bgcolor});
     }
@@ -308,10 +317,12 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     var targetNodeName = instance.data.Relationship.target;
 
     var sourceNode = instanceMap.get(sourceNodeName) orelse {
+        debug("ERROR: No instance {s} found\n", .{sourceNodeName});
         return error.NoSuchInstance;
     };
 
     var targetNode = instanceMap.get(targetNodeName) orelse {
+        debug("ERROR: No instance {s} found\n", .{targetNodeName});
         return error.NoSuchInstance;
     };
 
@@ -323,11 +334,11 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     var edgeParams: EdgeParams = .{};
 
     if(instance.first_child) |child| {
-        getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
+        try getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
     }
 
     if(edge.first_child) |child| {
-        getFieldsFromChildSet(@TypeOf(edgeParams), child, &edgeParams);
+        try getFieldsFromChildSet(@TypeOf(edgeParams), child, &edgeParams);
     }
 
     
@@ -337,10 +348,36 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     var label = instanceParams.label orelse edgeParams.label orelse edge.name;
     try writer.print("label=\"{s}\",", .{label});
     // Style
+    var edge_style = instanceParams.edge_style orelse dif.EdgeStyle.solid;
 
     // Start edge
+    try writer.print("style=\"{s}\",", .{std.meta.tagName(edge_style)});
+
+    try writer.print("dir=both,", .{});
+
+    {
+        var arrow = switch(instanceParams.source_symbol) {
+            .arrow_open => "vee",
+            .arrow_closed => "onormal",
+            .arrow_filled => "normal",
+            .none => "none",
+            // else => return error.NoSuchArrow,
+        };
+        // TODO: Currently setting dir=both here, but perhaps we should define a set of common defaults at top? E.g. fill, dir=both etc?
+        try writer.print("arrowtail={s},dir=both,", .{arrow});
+    }
 
     // End edge
+    {
+        var arrow = switch(instanceParams.target_symbol) {
+            .arrow_open => "vee",
+            .arrow_closed => "onormal",
+            .arrow_filled => "normal",
+            .none => "none",
+            // else => return error.NoSuchArrow,
+        };
+        try writer.print("arrowhead={s},", .{arrow});
+    }
 
     try writer.writeAll("];\n");
 }
@@ -378,15 +415,19 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
 
     // Group-level attributes
     var groupParams: GroupParams = .{};
-    getFieldsFromChildSet(@TypeOf(groupParams), instance, &groupParams);
+    try getFieldsFromChildSet(@TypeOf(groupParams), instance, &groupParams);
 
     if(groupParams.label) |label| {
         try writer.print("label=\"{s}\";labelloc=\"t\";\n", .{label});
     }
+
+    if(groupParams.layout) |layout| {
+        try writer.print("layout=\"{s}\";\n", .{layout});
+    }
 }
 
 pub fn difToDot(comptime Writer: type, writer: Writer, rootNode: *DifNode) !void {
-    // TODO: Currently no scoping of node-types
+    // Att: Currently no scoping of node-types
     // TODO: Take allocator as argument
     var nodeMap = DifNodeMap.init(testing.allocator);
     defer nodeMap.deinit();
@@ -399,12 +440,8 @@ pub fn difToDot(comptime Writer: type, writer: Writer, rootNode: *DifNode) !void
 
     try findAllEdgesNodesAndInstances(rootNode, &nodeMap, &edgeMap, &instanceMap);
 
-    // TODO: Need to find all nodes (TBD: scoped by groups?)
-    // TODO: Need to find all edges (global)
-    // Then, instantiate by group
-    // Relationships can be defined at last? At least if there's no scoping-concerns for DOT
-    // w("hello: {s}!\n", .{rootNode.name});
     try writer.writeAll("strict digraph {\n");
+    // try writer.writeAll("layout=fdp;");
 
     // TODO: Implement "include"-support? Enough to append to top node?
     try renderGeneration(Writer, writer, rootNode, &nodeMap, &edgeMap, &instanceMap);

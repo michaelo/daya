@@ -23,6 +23,7 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
     var tokenizer = Tokenizer.init(buf[0..]);
     var nodePool = initBoundedArray(dif.DifNode, 1024);
     var rootNode = try dif.tokensToDif(1024, &nodePool, &tokenizer);
+    // dif.dumpDifAst(rootNode, 0);
     try dot.difToDot(Writer, writer, rootNode);
 }
 

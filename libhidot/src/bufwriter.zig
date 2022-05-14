@@ -15,7 +15,7 @@ pub const ArrayBuf = struct {
     /// Current number of bytes written to the array
     len: usize = 0,
 
-    /// Slice from idx 0 to .len - e.g. the utilized area
+    /// Slice from idx 0 to .len - i.e. the utilized area
     pub fn slice(self: *ArrayBuf) []u8 {
         return self.buf[0..self.len];
     }
