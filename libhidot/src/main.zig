@@ -20,11 +20,16 @@ const debug = std.debug.print;
 
 /// Full process from input-buffer of hidot-format to ouput-buffer of dot-format
 pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
+
     var tokenizer = Tokenizer.init(buf[0..]);
     var nodePool = initBoundedArray(dif.DifNode, 1024);
     var rootNode = try dif.tokensToDif(1024, &nodePool, &tokenizer);
     // dif.dumpDifAst(rootNode, 0);
-    try dot.difToDot(Writer, writer, rootNode);
+    try dot.difToDot(Writer, writer, allocator, rootNode);
 }
 
 pub fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {

@@ -9,24 +9,6 @@ const debug = std.debug.print;
 const dif = @import("dif.zig");
 const DifNode = dif.DifNode;
 
-// fn writeNodeFields(comptime Writer: type, node: *const dif.NodeInstance, def: *const dif.NodeDefinition, writer: Writer) !void {
-//     try writer.writeAll("[");
-//     if(def.label) |value| {
-//         try writer.print("label=\"{s}\\n{s}\",", .{node.name,value});
-//     }
-//     if(def.shape) |value| {
-//         try writer.print("shape=\"{s}\",", .{std.meta.tagName(value)});
-//     }
-//     if(def.bg_color) |value| {
-//         try writer.print("style=filled,bgcolor=\"{0s}\",fillcolor=\"{0s}\",", .{value});
-//     }
-//     if(def.fg_color) |value| {
-//         try writer.print("fontcolor=\"{0s}\",", .{value});
-//         // color=\"{0s}\", -- lines
-//     }
-//     try writer.writeAll("]");
-// }
-
 // test "writeNodeFields" {
 //     // Go through each fields and verify that it gets converted as expected
 //     var buf: [1024]u8 = undefined;
@@ -54,41 +36,6 @@ const DifNode = dif.DifNode;
 //     try testing.expect(std.mem.indexOf(u8, context.slice(), "My label") != null);
 //     try testing.expect(std.mem.indexOf(u8, context.slice(), "bgcolor=\"#FF0000\"") != null);
 //     try testing.expect(std.mem.indexOf(u8, context.slice(), "color=\"#000000\"") != null);
-// }
-
-
-// fn writeRelationshipFields(comptime Writer: type, def: *const dif.Relationship, writer: Writer) !void {
-//     try writer.writeAll("[");
-//     if(def.edge.label) |value| {
-//         try writer.print("label=\"{s}\",", .{value});
-//     }
-//     if(def.edge.edge_style) |value| {
-//         try writer.print("style=\"{s}\",", .{std.meta.tagName(value)});
-//     }
-//     {
-//         var arrow = switch(def.edge.target_symbol) {
-//             .arrow_open => "vee",
-//             .arrow_closed => "onormal",
-//             .arrow_filled => "normal",
-//             .none => "none",
-//             // else => return error.NoSuchArrow,
-//         };
-//         try writer.print("arrowhead={s},", .{arrow});
-//     }
-
-//     {
-//         var arrow = switch(def.edge.source_symbol) {
-//             .arrow_open => "vee",
-//             .arrow_closed => "onormal",
-//             .arrow_filled => "normal",
-//             .none => "none",
-//             // else => return error.NoSuchArrow,
-//         };
-//         // TODO: Currently setting dir=both here, but perhaps we should define a set of common defaults at top? E.g. fill, dir=both etc?
-//         try writer.print("arrowtail={s},dir=both,", .{arrow});
-//     }
-
-//     try writer.writeAll("]");
 // }
 
 
@@ -124,7 +71,6 @@ const DifNode = dif.DifNode;
 //     try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowtail=normal") != null);
 // }
 
-
 const DifNodeMap = std.StringHashMap(*DifNode);
 
 // Parse the entire node-tree from <node>, populate the maps with references to nodes, edges and instantiations indexed by their .name
@@ -159,11 +105,10 @@ const RenderError = error {
     OutOfMemory,
 };
 
-// TODO: Extract the relevant, valid fields for a node
-
 const NodeParams = struct {
     label: ?[]const u8 = null,
     bgcolor: ?[]const u8 = null,
+    fgcolor: ?[]const u8 = null,
     shape: ?[]const u8 = null,
 };
 
@@ -184,6 +129,17 @@ const GroupParams = struct {
     bgcolor: ?[]const u8 = null,
 };
 
+// Take a string and with simple heuristics try to make it more readable (replaces _ with space upon print)
+fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8) !void {
+    for(label) |c| {
+        try writer.print("{c}", .{switch(c) {
+            '_' => ' ',
+            else => c
+        }});
+    }
+}
+
+// Extracts a set of predefined key/values, based on the particular ParamsType
 fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) !void {
     var node = first_sibling;
     while(true) {
@@ -196,6 +152,8 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
                             result.label = node.data.Value.value;
                         } else if(std.mem.eql(u8, "bgcolor", param_name)) {
                             result.bgcolor = node.data.Value.value;
+                        } else if(std.mem.eql(u8, "fgcolor", param_name)) {
+                            result.fgcolor = node.data.Value.value;
                         } else if(std.mem.eql(u8, "shape", param_name)) {
                             result.shape = node.data.Value.value;
                         }
@@ -225,7 +183,7 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
                         }
                     },
                     else => {
-                        debug("ERROR: Unsupported ParamsType\n", .{});
+                        debug("ERROR: Unsupported ParamsType {s}\n", .{ParamsType});
                         unreachable;
                     }
                 }
@@ -252,13 +210,11 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
 
     var nodeName = instance.data.Instantiation.target;
 
-    // label: default name of instance + label of node type
-    //        if children: look for label there and replace instance.name if found
-
     var node = nodeMap.get(nodeName) orelse {
         w("ERROR: No node {s} found\n", .{nodeName});
         return RenderError.NoSuchNode;
     };
+
     // TODO: Dilemma; all other fields but label are overrides - if we could solve that, then we could just let
     //       both getNodeFieldsFromChildSet-calls take the same set according to presedence (node, then instantiation)
     if(instance.first_child) |child| {
@@ -270,11 +226,6 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
     }
 
     var instanceLabel = instanceParams.label orelse instance.name; // child-label-attr, orelse .name
-
-    // Extract relevant fields from immediate children: label, fgcolor, bgcolor, edge, shape
-    // TODO: Fault on detected grandchildren? No, this should be solved elsewhere...
-
-    // Extract fields from node
     
     // Print node name and start attr-list
     try writer.print("    \"{s}\"[", .{instance.name});
@@ -292,7 +243,9 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
     }
 
     // Foreground
-
+    if(instanceParams.fgcolor orelse nodeParams.fgcolor) |fgcolor| {
+        try writer.print("fontcolor=\"{0s}\",", .{fgcolor});
+    }
 
     // Background
     if(instanceParams.bgcolor orelse nodeParams.bgcolor) |bgcolor| {
@@ -301,10 +254,6 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
 
     // end attr-list/node
     try writer.writeAll("];\n");
-    
-
-    // compose a node by instance name, instance type(node), + immediate children-values, if any.
-
 }
 
 fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *DifNodeMap) anyerror!void {
@@ -345,8 +294,16 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     try writer.print("\"{s}\" -> \"{s}\"[", .{sourceNode.name, targetNode.name});
 
     // Label
-    var label = instanceParams.label orelse edgeParams.label orelse edge.name;
-    try writer.print("label=\"{s}\",", .{label});
+    if(instanceParams.label orelse edgeParams.label) |label| {
+        try writer.print("label=\"{s}\",", .{label});
+    } else {
+        if(edge.name) |label| {
+            try writer.print("label=\"", .{});
+            try printPrettify(Writer, writer, label);
+            try writer.print("\",", .{});
+        }
+    }
+
     // Style
     var edge_style = instanceParams.edge_style orelse dif.EdgeStyle.solid;
 
@@ -426,16 +383,16 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
     }
 }
 
-pub fn difToDot(comptime Writer: type, writer: Writer, rootNode: *DifNode) !void {
+pub fn difToDot(comptime Writer: type, writer: Writer, allocator: std.mem.Allocator, rootNode: *DifNode) !void {
     // Att: Currently no scoping of node-types
     // TODO: Take allocator as argument
-    var nodeMap = DifNodeMap.init(testing.allocator);
+    var nodeMap = DifNodeMap.init(allocator);
     defer nodeMap.deinit();
 
-    var edgeMap = DifNodeMap.init(testing.allocator);
+    var edgeMap = DifNodeMap.init(allocator);
     defer edgeMap.deinit();
 
-    var instanceMap = DifNodeMap.init(testing.allocator);
+    var instanceMap = DifNodeMap.init(allocator);
     defer instanceMap.deinit();
 
     try findAllEdgesNodesAndInstances(rootNode, &nodeMap, &edgeMap, &instanceMap);
