@@ -364,7 +364,7 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
                 if(node.first_child) |child| {
                     try renderGeneration(Writer, writer, child, nodeMap, edgeMap, instanceMap);
                 }
-                try writer.writeAll("}}\n");
+                try writer.writeAll("}\n");
             },
             else => {}
         }
@@ -404,10 +404,10 @@ pub fn difToDot(comptime Writer: type, writer: Writer, rootNode: *DifNode) !void
     // Then, instantiate by group
     // Relationships can be defined at last? At least if there's no scoping-concerns for DOT
     // w("hello: {s}!\n", .{rootNode.name});
-    try writer.writeAll("strict digraph {{\n");
+    try writer.writeAll("strict digraph {\n");
 
     // TODO: Implement "include"-support? Enough to append to top node?
     try renderGeneration(Writer, writer, rootNode, &nodeMap, &edgeMap, &instanceMap);
 
-    try writer.writeAll("}}\n");
+    try writer.writeAll("}\n");
 }
