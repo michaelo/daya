@@ -3,11 +3,10 @@ const builtin = @import("builtin");
 
 const dif = @import("dif.zig");
 const dot = @import("dot.zig");
-const tokenizer = @import("tokenizer.zig");
+const Tokenizer = @import("tokenizer.zig").Tokenizer;
 
 const initBoundedArray = @import("utils.zig").initBoundedArray;
 const Token = @import("tokenizer.zig").Token;
-const Dif = dif.Dif;
 
 pub const LIB_VERSION = blk: {
     if (builtin.mode != .Debug) {
@@ -20,12 +19,11 @@ pub const LIB_VERSION = blk: {
 const debug = std.debug.print;
 
 /// Full process from input-buffer of hidot-format to ouput-buffer of dot-format
-pub fn hidotToDot(comptime Writer: type, buf: []const u8, writer: Writer) !void {
-    var tokens_buf = initBoundedArray(Token, 1024);
-    try tokens_buf.resize(try tokenizer.tokenize(buf, tokens_buf.unusedCapacitySlice()));
-    var mydif = dif.Dif{};
-    try dif.tokensToDif(tokens_buf.slice(), &mydif);
-    try dot.difToDot(Writer, &mydif, writer);
+pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void {
+    var tokenizer = Tokenizer.init(buf[0..]);
+    var nodePool = initBoundedArray(dif.DifNode, 1024);
+    var rootNode = try dif.tokensToDif(1024, &nodePool, &tokenizer);
+    try dot.difToDot(Writer, writer, rootNode);
 }
 
 pub fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {

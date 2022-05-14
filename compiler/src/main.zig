@@ -247,7 +247,7 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
     };
 
     defer file.close();
-    _ = hidot.hidotToDot(std.fs.File.Writer, input_buffer.slice(), file.writer()) catch |e| {
+    _ = hidot.hidotToDot(std.fs.File.Writer, file.writer(), input_buffer.slice()) catch |e| {
         debug("ERROR: Got error from libhidot: {s}\n", .{e});
         return errors.ProcessError;
     };

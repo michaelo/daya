@@ -3,7 +3,7 @@ const utils = @import("utils.zig");
 const testing = std.testing;
 const debug = std.debug.print;
 
-fn keywordOridentifier(value: []const u8) TokenType {
+fn keywordOrIdentifier(value: []const u8) TokenType {
     if (std.mem.eql(u8, value, "node")) {
         return TokenType.keyword_node;
     } else if (std.mem.eql(u8, value, "edge")) {
@@ -167,7 +167,7 @@ pub const Tokenizer = struct {
                         '\n', '\t', ' ', '\r', ';', '{', '}', '(', ')', ':', '=' => {
                             result.end = self.pos;
                             // TODO: Should we here have control if we're on lhs/rhs? Reserved leftside-keywords could be valid values
-                            result.typ = keywordOridentifier(self.buf[result.start..result.end]);
+                            result.typ = keywordOrIdentifier(self.buf[result.start..result.end]);
                             break;
                         },
                         else => {}
