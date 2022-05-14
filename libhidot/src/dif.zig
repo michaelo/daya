@@ -577,14 +577,7 @@ test "parseTokensRecursively" {
 
 const DifNodeMap = std.StringHashMap(*DifNode);
 
-test "Map" {
-    var map = std.StringHashMap([]const u8).init(testing.allocator);
-    defer map.deinit();
-    try map.put("key", "value");
-    debug("key: {s}\n", .{map.get("key")});
-    debug("key2: {s}\n", .{map.get("key2")});
-}
-
+// Parse the entire node-tree from <node>, populate the maps with references to nodes, edges and instantiations indexed by their .name
 fn findAllEdgesNodesAndInstances(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) error{OutOfMemory}!void {
     switch(node.node_type) {
         .Node => {
@@ -608,10 +601,6 @@ fn findAllEdgesNodesAndInstances(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: 
     }
 }
 
-// fn renderNode() void {
-//     // check node and immediate children
-// }
-
 const RenderError = error {
     UnexpectedType,
     NoSuchNode,
@@ -628,52 +617,55 @@ const NodeParams = struct {
     shape: ?[]const u8 = null,
 };
 
-fn getNodeFieldsFromChildSet(first_sibling: *DifNode, result: *NodeParams) void {
-    var node = first_sibling;
-    while(true) {
-        // check node type: We're only looking for value-types
-        if(node.node_type != .Value) {
-            continue;
-        }
-
-        if(node.name) |param_name| {
-            if(std.mem.eql(u8, "label", param_name)) {
-                result.label = node.data.Value.value;
-            } else if(std.mem.eql(u8, "bgcolor", param_name)) {
-                result.bgcolor = node.data.Value.value;
-            } else if(std.mem.eql(u8, "shape", param_name)) {
-                result.shape = node.data.Value.value;
-            }
-        }
-
-        if(node.next_sibling) |next| {
-            node = next;
-        } else {
-            break;
-        }
-    }
-}
-
-pub const EdgeParams = struct {
+const EdgeParams = struct {
     label: ?[]const u8 = null,
-    // edge_style: ?EdgeStyle = EdgeStyle.solid,
-    // source_symbol: EdgeEndStyle = EdgeEndStyle.none,
-    // source_label: ?[]const u8 = null,
-    // target_symbol: EdgeEndStyle = EdgeEndStyle.arrow_open,
-    // target_label: ?[]const u8 = null,
+
+    // TODO:
+    edge_style: ?EdgeStyle = EdgeStyle.solid,
+    source_symbol: EdgeEndStyle = EdgeEndStyle.none,
+    source_label: ?[]const u8 = null,
+    target_symbol: EdgeEndStyle = EdgeEndStyle.arrow_open,
+    target_label: ?[]const u8 = null,
 };
 
-fn getEdgeFieldsFromChildSet(first_sibling: *DifNode, result: *EdgeParams) void {
+const GroupParams = struct {
+    label: ?[]const u8 = null,
+    bgcolor: ?[]const u8 = null,
+};
+
+fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) void {
     var node = first_sibling;
     while(true) {
         // check node type: We're only looking for value-types
-        if(node.node_type != .Value) {
-            continue;
-        }
-
-        if(node.name) |param_name| {
-            if(std.mem.eql(u8, "label", param_name)) {
-                result.label = node.data.Value.value;
+        if(node.node_type == .Value) {
+            if(node.name) |param_name| {
+                switch(ParamsType) {
+                    NodeParams => {
+                        if(std.mem.eql(u8, "label", param_name)) {
+                            result.label = node.data.Value.value;
+                        } else if(std.mem.eql(u8, "bgcolor", param_name)) {
+                            result.bgcolor = node.data.Value.value;
+                        } else if(std.mem.eql(u8, "shape", param_name)) {
+                            result.shape = node.data.Value.value;
+                        }
+                    },
+                    EdgeParams => {
+                        if(std.mem.eql(u8, "label", param_name)) {
+                            result.label = node.data.Value.value;
+                        }
+                    },
+                    GroupParams => {
+                        if(std.mem.eql(u8, "label", param_name)) {
+                            result.label = node.data.Value.value;
+                        } else if(std.mem.eql(u8, "bgcolor", param_name)) {
+                            result.bgcolor = node.data.Value.value;
+                        }
+                    },
+                    else => {
+                        debug("ERROR: Unsupported ParamsType\n", .{});
+                        unreachable;
+                    }
+                }
             }
         }
 
@@ -683,8 +675,8 @@ fn getEdgeFieldsFromChildSet(first_sibling: *DifNode, result: *EdgeParams) void 
             break;
         }
     }
-}
 
+}
 
 fn renderInstantiation(instance: *DifNode, nodeMap: *DifNodeMap) RenderError!void {
     if(instance.node_type != .Instantiation) {
@@ -708,15 +700,16 @@ fn renderInstantiation(instance: *DifNode, nodeMap: *DifNodeMap) RenderError!voi
     // TODO: Dilemma; all other fields but label are overrides - if we could solve that, then we could just let
     //       both getNodeFieldsFromChildSet-calls take the same set according to presedence (node, then instantiation)
     if(instance.first_child) |child| {
-        getNodeFieldsFromChildSet(child, &instanceParams);
+        getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
+        // getNodeFieldsFromChildSet(child, &instanceParams);
     }
 
     if(node.first_child) |child| {
-        getNodeFieldsFromChildSet(child, &nodeParams);
+        getFieldsFromChildSet(@TypeOf(nodeParams), child, &nodeParams);
+        // getNodeFieldsFromChildSet(child, &nodeParams);
     }
 
     var instanceLabel = instanceParams.label orelse instance.name; // child-label-attr, orelse .name
-    // var nodeLabel = nodeParams.label orelse 
 
     // Extract relevant fields from immediate children: label, fgcolor, bgcolor, edge, shape
     // TODO: Fault on detected grandchildren? No, this should be solved elsewhere...
@@ -787,11 +780,11 @@ fn renderRelationship(instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *Di
     var edgeParams: EdgeParams = .{};
 
     if(instance.first_child) |child| {
-        getEdgeFieldsFromChildSet(child, &instanceParams);
+        getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
     }
 
     if(edge.first_child) |child| {
-        getEdgeFieldsFromChildSet(child, &edgeParams);
+        getFieldsFromChildSet(@TypeOf(edgeParams), child, &edgeParams);
     }
 
     
@@ -814,26 +807,41 @@ fn renderRelationship(instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *Di
 /// Recursive
 fn renderGeneration(instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) RenderError!void {
     const w = debug;
+    var node: *DifNode = instance;
 
-    switch(instance.node_type) {
-        .Instantiation => {
-            try renderInstantiation(instance, nodeMap);
-        },
-        .Relationship => {
-            try renderRelationship(instance, instanceMap, edgeMap);
-        },
-        .Group => {
-            w("subgraph cluster_{s} {{\n", .{instance.name});
-            if(instance.first_child) |child| {
-                try renderGeneration(child, nodeMap, edgeMap, instanceMap);
-            }
-            w("}}\n", .{});
-        },
-        else => {}
+    // Iterate over siblings
+    while(true) {
+        switch(node.node_type) {
+            .Instantiation => {
+                try renderInstantiation(node, nodeMap);
+            },
+            .Relationship => {
+                try renderRelationship(node, instanceMap, edgeMap);
+            },
+            .Group => {
+                // Recurse on groups
+                w("subgraph cluster_{s} {{\n", .{node.name});
+                if(node.first_child) |child| {
+                    try renderGeneration(child, nodeMap, edgeMap, instanceMap);
+                }
+                w("}}\n", .{});
+            },
+            else => {}
+        }
+
+        if (node.next_sibling) |next| {
+            node = next;
+        } else {
+            break;
+        }
     }
 
-    if (instance.next_sibling) |next| {
-        try renderGeneration(next, nodeMap, edgeMap, instanceMap);
+    // Group-level attributes
+    var groupParams: GroupParams = .{};
+    getFieldsFromChildSet(@TypeOf(groupParams), instance, &groupParams);
+
+    if(groupParams.label) |label| {
+        w("label=\"{s}\";labelloc=\"t\";\n", .{label});
     }
 }
 
@@ -869,22 +877,28 @@ fn experimentalDotWriter(rootNode: *DifNode) !void {
 test "dotifier exploration" {
     // Exploration
     const buf = 
+        \\label="My diagram";
+        \\
         \\node Component {
         \\  bgcolor=green;  
         \\};
         \\edge owns;
         \\group Silly {
-        \\compA: Component;
-        \\compA owns compB;
-        \\compB: Component {
-        \\  bgcolor=blue;
-        \\  shape=box;
-        \\};
+        \\  label="Silly group";
+        \\  compA: Component;
+        \\  compA owns compB;
+        \\  compB owns compA {
+        \\    label="ownaroo";
+        \\  };
+        \\  compB: Component {
+        \\    bgcolor=blue;
+        \\    shape=box;
+        \\  };
         \\}
     ;
     var tokenizer = Tokenizer.init(buf[0..]);
     var nodePool = initBoundedArray(DifNode, 1024);
     var rootNode = try tokensToDif(1024, &nodePool, &tokenizer);
-    _ = rootNode;
+    // dumpDifAst(rootNode, 0);
     try experimentalDotWriter(rootNode);
 }
