@@ -1,36 +1,57 @@
+label="My example diagram";
+
 // Define node-types
 node Interface {
-    label: "<Interface>"
-    shape: diamond
-    color: #000000
-    background: #ffffff
+    label="<Interface>";
+    shape=diamond;
+    fgcolor="#000000";
+    bgcolor="#ffffff";
 }
 
 node Module {
-    label: "[Module]"
-    shape: box
-    color: #000000
-    background: #ffffff
+    label="[Module]";
+    shape=box;
+    fgcolor="#000000";
+    bgcolor="#ffffff";
 }
 
-// Define edge/relationship-types
+// Define edge-/relationship-types
 edge implements {
-    label: "Implements"
-    style: dashed
-    targetSymbol: arrow_open
+    label="Implements";
+    style=dashed;
+    target_symbol=arrow_open;
 }
 
 edge depends_on {
-    label: "Depends on"
-    style: solid
-    targetSymbol: arrow_open
+    label="Depends on";
+    style=solid;
+    target_symbol=arrow_open;
 }
 
-// Declare the module-instances
-IIterator: Interface
-MySomething: Module
-SomeDependency: Module
+edge relates_to {
+    source_symbol=arrow_open;
+    target_symbol=arrow_open;
+}
+
+// Declare the module-instances, optionally grouped
+IIterator: Interface;
+
+group Core {
+    label="Core";
+
+    MySomething: Module;
+    MyElse: Module;
+}
+
+SomeDependency: Module {
+    // An instantiation can override base-node fields
+    bgcolor="#ffdddd";
+}
 
 // Describe relationships between modules
-MySomething implements IIterator
-MySomething depends_on SomeDependency
+MySomething implements IIterator;
+MySomething depends_on SomeDependency;
+MySomething relates_to MyElse {
+    // A relationship can override base-edge fields
+    target_symbol=arrow_filled;
+}

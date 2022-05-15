@@ -96,7 +96,7 @@ pub const Tokenizer = struct {
                             // state = .hash; // Currently no need to do anything but passthrough the color
                             state = .identifier;
                         },
-                        'a'...'z', 'A'...'Z', '-' => {
+                        'a'...'z', 'A'...'Z', '-', '<', '>' => {
                             state = .identifier;
                         },
                         '0'...'9' => {

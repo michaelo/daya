@@ -9,9 +9,11 @@ Example usage of compiler:
 
 hidot is a tool and library to convert from the hidot format to regular .dot, .png og .svg.
 
-The hidot-format is intended to allow for rapid graphing from text sources. Mostly relationship-like diagrams such as (UML's= activity-, component-diagrams etc. There are currently no intentions to add features for sequence-diagrams and such.
+The hidot-format is intended to allow for rapid graphing from text sources. Mostly relationship-like diagrams such as (UML's= activity-, component-diagrams etc. There are currently no plan to add features for sequence-diagrams and such.
 
 It can be thought of as "a subset of dot with custom types" (*).
+
+The subset of attributes and such is highly opiniated, and very much subject to change.
 
 (*): This is also to be read as; There are many, many diagram-situations which are not intended to be solved by hidot.
 
@@ -19,55 +21,79 @@ It can be thought of as "a subset of dot with custom types" (*).
 Hidot format example:
 ---------------
 
+file: common_types.hidot:
+
     // Define node-types
     node Interface {
-        label="<Interface>"
-        shape=diamond
-        color=#000000
-        background=#ffffff
+        label="<Interface>";
+        shape=diamond;
+        fgcolor=#000000;
+        bgcolor=#ffffff;
     }
 
     node Module {
-        label="[Module]"
-        shape=box
-        color=#000000
-        background=#ffffff
+        label="[Module]";
+        shape=box;
+        fgcolor=#000000;
+        bgcolor=#ffffff;
     }
 
-    // Define edge/relationship-types
+    // Define edge-/relationship-types
     edge implements {
-        label="Implements"
-        style=dashed
-        targetSymbol=arrow_open
+        label="Implements";
+        style=dashed;
+        target_symbol=arrow_open;
     }
 
     edge depends_on {
-        label="Depends on"
-        style=solid
-        targetSymbol=arrow_open
+        label="Depends on";
+        style=solid;
+        target_symbol=arrow_open;
     }
 
-    // Declare the module-instances
-    IIterator: Interface
-    MySomething: Module
-    SomeDependency: Module
+    edge relates_to {
+        source_symbol=arrow_open;
+        target_symbol=arrow_open;
+    }
+
+file: mygraph.hidot
+
+    @common_node_types.hidot // imports the file as described above. Limitation: path can't contain newline
+    label="My example diagram";
+
+    // Declare the module-instances, optionally grouped
+    IIterator: Interface;
+
+    group Core {
+        label="Core";
+
+        MySomething: Module;
+        MyElse: Module;
+    }
+
+    SomeDependency: Module {
+        // An instantiation can override base-node fields
+        bgcolor="#ffdddd";
+    }
 
     // Describe relationships between modules
-    MySomething implements IIterator
-    MySomething depends_on SomeDependency
+    MySomething implements IIterator;
+    MySomething depends_on SomeDependency;
+    MySomething relates_to MyElse {
+        // A relationship can override base-edge fields
+        target_symbol=arrow_filled;
+    }
 
 
 Result:
 
 ![Result of hidot to png compilation](examples/readme_example.hidot.png)
 
-* TODO: Update example .hidot and .png as we move on
-
 Components
 -----------
 
 The system is split into the following components:
-* Compiler library (/libhidot) - the core compiler, can be linked into e.g compiler exe, web service, and possibly in the end as WASM to make the frontend standalone.
+* Compiler library (/libhidot) - the core compiler, can be linked into e.g compiler exe, web service, and possibly in the end as WASM to make the web frontend standalone.
 * Compiler executable (/compiler)
 * Web service
 * Web frontend
@@ -94,19 +120,21 @@ Minimal, single-page, input-form to provide hidot data and desired output-format
 TODO
 ---------
 * Integrate dot / libdot
-  * including libs for png and svg?
+    * including libs for png and svg?
 * .hidot
-  * Support colors - simply passthrough colors to dot: https://graphviz.org/docs/attr-types/color/ . No need to convert
-  * Add top-level layout{} for e.g. background, padding, layout-engine, ...
-  * Support groups
-  * TBD: Define styles ala CSS-classes, which then can be applied to the individual types?
-  * Implement more advanced shapes? E.g. an UML-like class with sections?
-  * Implement import-functionality
-  * ...
-* Finish v1 hidot-syntax
+    * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
+    * Implement import-functionality
+    * Explicitly define behaviour wrt duplicate definitions; shall the latter be invalid behaviour, or shall they be fused? Either simply adding children, or explicitly checking for type and override values.
+    * Support "comments"/"annotations": a post-it-like block with text tied to a particular instantiation or relationship.
+    * Simplify syntax: allow } as eos. Don't require quotes around #-colors.
+* Finish v1 hidot-syntax: what is scope?
 * Ensure compilator supports entire hidot-syntax
-* Implement web service
-* Implement frontend
+* Lower importance:
+    * Implement web service
+    * Implement frontend
+* Nice-to-haves:
+    * Accept a list of "instantiations" to only render whatever relates to them. Accept "degrees of separation" as well?
+    * Support "playback"-functionality? Render node-by-node as they are instantiated, ordered by source?
 
 
 Attributions
