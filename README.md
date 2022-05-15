@@ -45,11 +45,7 @@ file: common_types.hidot:
         target_symbol=arrow_open;
     }
 
-    edge depends_on {
-        label="Depends on";
-        style=solid;
-        target_symbol=arrow_open;
-    }
+    edge depends_on; // rely on defaults
 
     edge relates_to {
         source_symbol=arrow_open;
@@ -89,6 +85,60 @@ Result:
 
 ![Result of hidot to png compilation](examples/readme_example.hidot.png)
 
+Hidot grammar
+-----------
+Types of statements:
+
+* Declare a node-type:
+
+        node NodeType;
+
+        node OtherNodeType {
+            label="Custom label";
+            shape=diamond;
+        }
+
+* Declare an edge-type
+
+        // will default to a simple, one-directional arrow when used in a relationship
+        edge owns;
+
+        // will render a two-way arrow when used in a relationship
+        edge twowaydataflow {
+            source_symbol=arrow_filled;
+            target_symbol=arrow_filled;
+        }
+
+* Create a specific instance of a node
+
+        myinstance: NodeType;
+
+        otherinstance: OtherNodeType;
+
+* Specify a relationship between two node-instanes using an edge
+
+        myinstance owns otherinstance;
+
+        otherinstance twowaydataflow {
+            label="Overridden label for edge";
+        }
+
+For the different types there are a set of allowed parameters that can be specificed:
+
+* For node or instance:
+    * label: string
+    * bgcolor: string/quoted #rrggbb, forwarded directly to dot.
+    * fgcolor: see bgcolor.
+    * shape: string, forwarded directly to dot: https://graphviz.org/doc/info/shapes.html
+* for edge or relationship:
+    * label: string
+    * source_symbol: none|arrow_filled|arrow_closed|arrow_open. default: none
+    * target_symbol: see source_symbol. default: arrow_open
+    * edge_style: solid|dotted|dashed|bold. default: solid
+* An instance automatically inherits the parameters of their node-type. The labels are concatinated with a newline, the remaining fields are overridden.
+* If no lable is specified, the name is used
+* The parameters of an edge can be overridden pr releationship-entry
+
 Components
 -----------
 
@@ -106,7 +156,7 @@ The system is split into the following components:
 
 Two parts:
 1. An endpoint which takes hidot and returns dot, PNG or SVG.
-1. Serve the static frontend
+1. Provider of the static frontend
 
 ### Frontend
 
@@ -115,18 +165,19 @@ Minimal, single-page, input-form to provide hidot data and desired output-format
 
 ### Web component for easy inclusion into sites
 
-
+...
 
 TODO
 ---------
 * Integrate dot / libdot
     * including libs for png and svg?
+* Implement a semantic step to verify that the DIF makes sense
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Implement import-functionality
     * Explicitly define behaviour wrt duplicate definitions; shall the latter be invalid behaviour, or shall they be fused? Either simply adding children, or explicitly checking for type and override values.
     * Support "comments"/"annotations": a post-it-like block with text tied to a particular instantiation or relationship.
-    * Simplify syntax: allow } as eos. Don't require quotes around #-colors.
+    * Simplify syntax: allow } as EOS. Don't require quotes around #-colors.
 * Finish v1 hidot-syntax: what is scope?
 * Ensure compilator supports entire hidot-syntax
 * Lower importance:
@@ -135,6 +186,7 @@ TODO
 * Nice-to-haves:
     * Accept a list of "instantiations" to only render whatever relates to them. Accept "degrees of separation" as well?
     * Support "playback"-functionality? Render node-by-node as they are instantiated, ordered by source?
+    * Mode to allow anonymous types? E.g. don't require predefined nodes/edges, more simular to how dot behaves.
 
 
 Attributions

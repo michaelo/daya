@@ -339,34 +339,34 @@ pub fn dump(buf: []const u8) void {
     }
 }
 
-test "tokenize exploration 2" {
-    var buf =
-        \\node Module {
-        \\  label=unquoted value;
-        \\  width=300px;
-        \\}
-        \\
-        \\group Components {
-        \\    group LibComponents {
-        \\        LibCompA: Component;
-        \\        LibCompB: Component;
-        \\    };
-        \\    
-        \\    group ApiComponents {
-        \\        ApiCompA: Component;
-        \\        ApiCompB: Component;
-        \\    };
-        \\
-        \\    ApiComponents uses LibComponents;
-        \\
-        \\    ApiCompA uses LibCompA;
-        \\    ApiCompA uses LibCompB;
-        \\};
-        \\
-    ;
+// test "tokenize exploration 2" {
+//     var buf =
+//         \\node Module {
+//         \\  label=unquoted value;
+//         \\  width=300px;
+//         \\}
+//         \\
+//         \\group Components {
+//         \\    group LibComponents {
+//         \\        LibCompA: Component;
+//         \\        LibCompB: Component;
+//         \\    };
+//         \\    
+//         \\    group ApiComponents {
+//         \\        ApiCompA: Component;
+//         \\        ApiCompB: Component;
+//         \\    };
+//         \\
+//         \\    ApiComponents uses LibComponents;
+//         \\
+//         \\    ApiCompA uses LibCompA;
+//         \\    ApiCompA uses LibCompB;
+//         \\};
+//         \\
+//     ;
 
-    dump(buf[0..]);
-}
+//     dump(buf[0..]);
+// }
 
 // Adds tokens to tokens_out and returns number of tokens found/added
 pub fn tokenize(buf: []const u8, tokens_out: []Token) !usize {

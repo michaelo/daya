@@ -1,11 +1,16 @@
+// TODO: move to external file to demonstrate includes
+
+
+
+// Actual content in this
 label="My example diagram";
 
 // Define node-types
 node Interface {
     label="<Interface>";
     shape=diamond;
-    fgcolor="#000000";
-    bgcolor="#ffffff";
+    fgcolor="#ffffff";
+    bgcolor="#000000";
 }
 
 node Module {
@@ -22,11 +27,7 @@ edge implements {
     target_symbol=arrow_open;
 }
 
-edge depends_on {
-    label="Depends on";
-    style=solid;
-    target_symbol=arrow_open;
-}
+edge depends_on; // rely on defaults
 
 edge relates_to {
     source_symbol=arrow_open;

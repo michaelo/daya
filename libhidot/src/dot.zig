@@ -8,66 +8,63 @@ const debug = std.debug.print;
 const dif = @import("dif.zig");
 const DifNode = dif.DifNode;
 
-// test "writeNodeFields" {
-//     // Go through each fields and verify that it gets converted as expected
-//     var buf: [1024]u8 = undefined;
-//     var context = bufwriter.ArrayBuf {
-//         .buf = buf[0..]
-//     };
+test "writeNodeFields" {
+    // Go through each fields and verify that it gets converted as expected
+    var buf: [1024]u8 = undefined;
+    var context = bufwriter.ArrayBuf {
+        .buf = buf[0..]
+    };
 
-//     var writer = context.writer();
+    var writer = context.writer();
 
-//     var source =
-//         \\node MyNode {
-//         \\    label: "My label"
-//         \\    color: #000000
-//         \\    background: #FF0000
-//         \\}
-//         \\Node: MyNode
-//         \\
-//         ;
+    var source =
+        \\node MyNode {
+        \\    label="My label";
+        \\    fgcolor="#000000";
+        \\    bgcolor="#FF0000";
+        \\}
+        \\Node: MyNode;
+        \\
+        ;
 
-//     try main.hidotToDot(bufwriter.ArrayBufWriter, source, writer);
-//     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
-//     // basic flow of logic is happening
-//     // debug("out: {s}\n", .{context.slice()});
-//     try testing.expect(std.mem.indexOf(u8, context.slice(), "\"Node\"") != null);
-//     try testing.expect(std.mem.indexOf(u8, context.slice(), "My label") != null);
-//     try testing.expect(std.mem.indexOf(u8, context.slice(), "bgcolor=\"#FF0000\"") != null);
-//     try testing.expect(std.mem.indexOf(u8, context.slice(), "color=\"#000000\"") != null);
-// }
+    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
+    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
+    // basic flow of logic is happening
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "\"Node\"") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "My label") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "bgcolor=\"#FF0000\"") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "color=\"#000000\"") != null);
+}
 
-// test "writeRelationshipFields" {
-//     // Go through each fields and verify that it gets converted as expected
-//     var buf: [1024]u8 = undefined;
-//     var context = bufwriter.ArrayBuf {
-//         .buf = buf[0..]
-//     };
+test "writeRelationshipFields" {
+    // Go through each fields and verify that it gets converted as expected
+    var buf: [1024]u8 = undefined;
+    var context = bufwriter.ArrayBuf {
+        .buf = buf[0..]
+    };
 
-//     var writer = context.writer();
+    var writer = context.writer();
 
-//     var source =
-//         \\node MyNode {}
-//         \\edge Uses {
-//         \\    label: "Edge label"
-//         \\    sourceSymbol: arrow_filled
-//         \\    targetSymbol: arrow_open
-//         \\}
-//         \\NodeA: MyNode
-//         \\NodeB: MyNode
-//         \\NodeA Uses NodeB
-//         \\
-//         ;
+    var source =
+        \\node MyNode {}
+        \\edge Uses {
+        \\    label="Edge label";
+        \\    source_symbol=arrow_filled;
+        \\    target_symbol=arrow_open;
+        \\}
+        \\NodeA: MyNode;
+        \\NodeB: MyNode;
+        \\NodeA Uses NodeB;
+        \\
+        ;
 
-//     try main.hidotToDot(bufwriter.ArrayBufWriter, source, writer);
-//     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
-//     // basic flow of logic is happening
-//     // debug("out: {s}\n", .{context.slice()});
-//     try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);
-//     // try testing.expect(std.mem.indexOf(u8, context.slice(), "Uses") != null);
-//     try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowhead=vee") != null);
-//     try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowtail=normal") != null);
-// }
+    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
+    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
+    // basic flow of logic is happening
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowhead=vee") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowtail=normal") != null);
+}
 
 const DifNodeMap = std.StringHashMap(*DifNode);
 
@@ -158,13 +155,13 @@ fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8) !void
     }
 }
 
-test "printPrettify" {
-    var stdout = std.io.getStdOut().writer();
-    try printPrettify(@TypeOf(stdout), stdout, "label\n");
-    try printPrettify(@TypeOf(stdout), stdout, "label_part\n");
-    try printPrettify(@TypeOf(stdout), stdout, "Hey Der\n");
-    try printPrettify(@TypeOf(stdout), stdout, "æøå_æøå\n"); // TODO: unicode not handled
-}
+// test "printPrettify" {
+//     var stdout = std.io.getStdOut().writer();
+//     try printPrettify(@TypeOf(stdout), stdout, "label\n");
+//     try printPrettify(@TypeOf(stdout), stdout, "label_part\n");
+//     try printPrettify(@TypeOf(stdout), stdout, "Hey Der\n");
+//     try printPrettify(@TypeOf(stdout), stdout, "æøå_æøå\n"); // TODO: unicode not handled
+// }
 
 // Extracts a set of predefined key/values, based on the particular ParamsType
 fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) !void {

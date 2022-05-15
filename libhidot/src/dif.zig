@@ -401,97 +401,94 @@ fn parseAndDump(buf: []const u8) void {
     dumpDifAst(&nodePool.slice()[0], 0);
 }
 
-test "parseTokensRecursively" {
-    {
-        const buf = "edge owns;";
-        parseAndDump(buf[0..]);
-    }
+// test "exploration:parseTokensRecursively" {
+//     {
+//         const buf = "edge owns;";
+//         parseAndDump(buf[0..]);
+//     }
 
-    {
-        const buf =
-            \\edge owns_with_label { label="my label"; }
-            \\edge owns_with_empty_set { }
-        ;
-        parseAndDump(buf[0..]);
-    }
+//     {
+//         const buf =
+//             \\edge owns_with_label { label="my label"; }
+//             \\edge owns_with_empty_set { }
+//         ;
+//         parseAndDump(buf[0..]);
+//     }
 
-    {
-        const buf =
-            \\node Component { label="my label"; }
-        ;
-        parseAndDump(buf[0..]);
-    }
+//     {
+//         const buf =
+//             \\node Component { label="my label"; }
+//         ;
+//         parseAndDump(buf[0..]);
+//     }
 
 
-    {
-        const buf =
-            \\//Definitions
-            \\node Component { label="<Component>"; }
-            \\node Actor { label="<Actor>"; }
-            \\edge uses { label="uses"; }
-            \\
-            \\// Groups / instantiations
-            \\group Externals {
-            \\  user: Actor { label="User"; };
-            \\}
-            \\group App {
-            \\  label="My app";
-            \\  group Interfaces {
-            \\    cli: Component;
-            \\  }
-            \\
-            \\  group Internals {
-            \\    core: Component;
-            \\  }
-            \\}
-            \\layer Main {
-            \\  user uses cli;
-            \\  cli uses core;
-            \\}
-            \\
-        ;
-        parseAndDump(buf[0..]);
-    }
+//     {
+//         const buf =
+//             \\//Definitions
+//             \\node Component { label="<Component>"; }
+//             \\node Actor { label="<Actor>"; }
+//             \\edge uses { label="uses"; }
+//             \\
+//             \\// Groups / instantiations
+//             \\group Externals {
+//             \\  user: Actor { label="User"; };
+//             \\}
+//             \\group App {
+//             \\  label="My app";
+//             \\  group Interfaces {
+//             \\    cli: Component;
+//             \\  }
+//             \\
+//             \\  group Internals {
+//             \\    core: Component;
+//             \\  }
+//             \\}
+//             \\layer Main {
+//             \\  user uses cli;
+//             \\  cli uses core;
+//             \\}
+//             \\
+//         ;
+//         parseAndDump(buf[0..]);
+//     }
 
-    {
-        const buf =
-            \\node Module {
-            \\  label=unquotedvalue;
-            \\//  width=300px;
-            \\}
-            \\
-            \\edge uses;
-            \\edge contains {
-            \\  label="contains for realz";
-            \\  color="black";
-            \\}
-            \\edge owns;
-            \\
-            \\group Components {
-            \\    
-            \\    group LibComponents {
-            \\        LibCompA: Component {
-            \\          label="test";
-            \\          shape="box";
-            \\        };
-            \\        LibCompB: Component;
-            \\    };
-            \\    
-            \\    group ApiComponents {
-            \\        ApiCompA: Component;
-            \\        ApiCompB: Component;
-            \\    };
-            \\
-            \\    ApiComponents uses LibComponents;
-            \\
-            \\    ApiCompA uses LibCompA;
-            \\    ApiCompA uses LibCompB;
-            \\};
-            \\
-        ;
-        parseAndDump(buf[0..]);
-    }
-
-    // Test: A node type, an edge type, two instantiations and a relationship between them
-    // TODO: Determine the valid attributes for nodes and edges. Determine how overrides shall be done. E.g concats of labels vs replacements.
-}
+//     {
+//         const buf =
+//             \\node Module {
+//             \\  label=unquotedvalue;
+//             \\//  width=300px;
+//             \\}
+//             \\
+//             \\edge uses;
+//             \\edge contains {
+//             \\  label="contains for realz";
+//             \\  color="black";
+//             \\}
+//             \\edge owns;
+//             \\
+//             \\group Components {
+//             \\    
+//             \\    group LibComponents {
+//             \\        LibCompA: Component {
+//             \\          label="test";
+//             \\          shape="box";
+//             \\        };
+//             \\        LibCompB: Component;
+//             \\    };
+//             \\    
+//             \\    group ApiComponents {
+//             \\        ApiCompA: Component;
+//             \\        ApiCompB: Component;
+//             \\    };
+//             \\
+//             \\    ApiComponents uses LibComponents;
+//             \\
+//             \\    ApiCompA uses LibCompA;
+//             \\    ApiCompA uses LibCompB;
+//             \\};
+//             \\
+//         ;
+//         parseAndDump(buf[0..]);
+//     }
+// }
