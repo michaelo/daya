@@ -267,6 +267,12 @@ fn callDot(input_file: []const u8, output_file: []const u8, output_format: Outpu
                                 }},
                                 .max_output_bytes = 128,
                             });
+
+    if(result.term.Exited != 0) {
+        debug("dot returned error: {s}\n", .{result.stderr});
+        debug("Generate .dot-file instead to debug generated data. This is most likely a bug in hidot.", .{});
+        return error.ProcessError;
+    }
     
     defer {
         allocator.free(result.stderr);
