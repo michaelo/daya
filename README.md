@@ -121,6 +121,8 @@ TODO
 ---------
 * Integrate dot / libdot
     * including libs for png and svg?
+* Improve error messages: e.g. using unsupporter target_symbol gives no specific info. Relationship with non-existent instance should pinpoint line, not only name.
+* Currently a lot of the defaults is handling within dot.zig - this is error-prone if we were to change graphing-backend
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Implement import-functionality

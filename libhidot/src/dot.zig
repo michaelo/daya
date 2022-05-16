@@ -112,7 +112,7 @@ const NodeParams = struct {
 
 const EdgeParams = struct {
     label: ?[]const u8 = null,
-    edge_style: ?dif.EdgeStyle = dif.EdgeStyle.solid,
+    edge_style: ?dif.EdgeStyle = null,
     source_symbol: ?dif.EdgeEndStyle = null,
     source_label: ?[]const u8 = null,
     target_symbol: ?dif.EdgeEndStyle = null,
@@ -339,7 +339,7 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     }
 
     // Style
-    var edge_style = instanceParams.edge_style orelse dif.EdgeStyle.solid;
+    var edge_style = instanceParams.edge_style orelse edgeParams.edge_style orelse dif.EdgeStyle.solid;
 
     // Start edge
     try writer.print("style=\"{s}\",", .{std.meta.tagName(edge_style)});
