@@ -294,10 +294,10 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
     if(instanceParams.note) |note| {
         // TODO: generate node name (comment_NN?)? Or does dot support anonymous "inline"-nodes?
         try writer.print(
-            \\note[label="{s}",fillcolor=#ffffaa,shape=note];
-            \\note -> {s}[arrowtail=none,arrowhead=none,style=dashed];
+            \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
+            \\note_{0x} -> "{2s}"[arrowtail=none,arrowhead=none,style=dashed];
             \\
-        , .{note, instance.name});
+        , .{@ptrToInt(instance), note, instance.name});
     }
 }
 
