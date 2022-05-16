@@ -418,7 +418,6 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
 
 pub fn difToDot(comptime Writer: type, writer: Writer, allocator: std.mem.Allocator, rootNode: *DifNode) !void {
     // Att: Currently no scoping of node-types
-    // TODO: Take allocator as argument
     var nodeMap = DifNodeMap.init(allocator);
     defer nodeMap.deinit();
 
@@ -431,9 +430,7 @@ pub fn difToDot(comptime Writer: type, writer: Writer, allocator: std.mem.Alloca
     try findAllEdgesNodesAndInstances(rootNode, &nodeMap, &edgeMap, &instanceMap);
 
     try writer.writeAll("strict digraph {\n");
-    // try writer.writeAll("layout=fdp;");
 
-    // TODO: Implement "include"-support? Enough to append to top node?
     try renderGeneration(Writer, writer, rootNode, &nodeMap, &edgeMap, &instanceMap);
 
     try writer.writeAll("}\n");

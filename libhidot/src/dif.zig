@@ -1,7 +1,6 @@
 /// Module responsible for parsing tokens to the Diagrammer Internal Format
 const std = @import("std");
 const utils = @import("utils.zig");
-// const mod_tokenizer = @import("tokenizer.zig");
 const Token = @import("tokenizer.zig").Token;
 const Tokenizer = @import("tokenizer.zig").Tokenizer;
 const TokenType = @import("tokenizer.zig").TokenType;
@@ -71,7 +70,6 @@ test "Color.fromHexstring" {
 // General strategy
 // For text: We start with simply storing slices of the input-data in the Dif
 // If we later find we need to preprocess something, we'll reconsider and add dedicated storage
-// TODO: Store the string for simple passthrough for dot?
 pub const NodeShape = enum {
     box,
     circle,
@@ -85,7 +83,6 @@ pub const NodeShape = enum {
     }
 };
 
-// TODO: Store the string for simple passthrough for dot?
 pub const EdgeStyle = enum {
     solid,
     dotted,
@@ -109,12 +106,12 @@ pub const EdgeEndStyle = enum {
 };
 
 const DifNodeType = enum {
-    Unknown,
+    // Unknown,
     Edge,
     Node,
     Group,
     Layer,
-    Layout,
+    // Layout,
     Instantiation,
     Relationship,
     Parameter, // key=value
@@ -133,10 +130,12 @@ pub const DifNode = struct {
     name: ?[]const u8 = null,
 
     data: union(DifNodeType) {
+        // TODO: Have a top-level "Unit" that represents an input-file?
+        //       To easily accomodade chaining multiple includes.
         Edge: struct {},
         Node: struct {},
         Group: struct {},
-        Layout: struct {},
+        // Layout: struct {},
         Layer: struct {},
         Instantiation: struct {
             target: []const u8,
@@ -149,7 +148,7 @@ pub const DifNode = struct {
         Value: struct {
             value: []const u8,
         },
-        Unknown: struct {},
+        // Unknown: struct {},
     },
 };
 

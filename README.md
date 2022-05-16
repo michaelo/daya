@@ -187,6 +187,7 @@ TODO
     * Accept a list of "instantiations" to only render whatever relates to them. Accept "degrees of separation" as well?
     * Support "playback"-functionality? Render node-by-node as they are instantiated, ordered by source?
     * Mode to allow anonymous types? E.g. don't require predefined nodes/edges, more simular to how dot behaves.
+    * Allow edges to specify valid source/target-node types?
 
 
 Attributions

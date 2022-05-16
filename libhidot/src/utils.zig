@@ -59,7 +59,6 @@ pub fn parseError(src: []const u8, start_idx: usize, comptime fmt: []const u8, a
 
 pub fn dumpSrcChunkRef(src: []const u8, start_idx: usize) void {
     const writeByte = std.io.getStdOut().writer().writeByte;
-    // TODO: wrap in separate error-printer, and this can simply extract the relevant chunk
     // Prints the line in which the start-idx resides.
     // Assumes idx'es are valid within src-range
     // Assumed used for error-scenarios, perf not a priority

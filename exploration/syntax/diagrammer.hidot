@@ -34,9 +34,6 @@ node ExternalDependency {
     label: "[External Dep]"
     shape: ellipse
 }
-
-// TODO: Allow edges to specify valid source/target-node types? I'd say yes
-
 edge NoLabel {
     style: solid
 }

@@ -237,8 +237,8 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
     input_buffer.resize(
         readFile(std.fs.cwd(), path_hidot_input, input_buffer.unusedCapacitySlice()) catch { return errors.CouldNotReadInputFile; }
     ) catch {
-        unreachable; // Because readFile will fail because of unsufficient storage in unusedCapacitySlice() before .resize() fails.
-        // return errors.ProcessError;
+        // Because readFile will fail because of unsufficient storage in unusedCapacitySlice() before .resize() fails.
+        unreachable;
     };
 
     var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch {

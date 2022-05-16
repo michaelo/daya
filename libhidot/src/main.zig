@@ -28,7 +28,15 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
     var tokenizer = Tokenizer.init(buf[0..]);
     var nodePool = initBoundedArray(dif.DifNode, 1024);
     var rootNode = try dif.tokensToDif(1024, &nodePool, &tokenizer);
-    // dif.dumpDifAst(rootNode, 0);
+    // TODO: check for includes, and add new units accordingly
+    // 1. Create a "Unit"-node, and add results of dif.tokensToDif() to this
+    // 2. Iterate over this node immediate children and find all includes.
+    // 3. Pr include; add as another top-level unit-sibling with parsed tokens
+    // TBD: This method currently accepts the file as buffer, need to wrap it to accept path?
+    // *-Unit -child-> <nodes from first compilation unit>
+    // |-Unit2 -child-> <nodes frmo second compilation unit>
+    // 
+    
     try dot.difToDot(Writer, writer, allocator, rootNode);
 }
 
