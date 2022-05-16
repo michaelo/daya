@@ -108,6 +108,7 @@ const NodeParams = struct {
     bgcolor: ?[]const u8 = null,
     fgcolor: ?[]const u8 = null,
     shape: ?[]const u8 = null,
+    note: ?[]const u8 = null,
 };
 
 const EdgeParams = struct {
@@ -183,6 +184,8 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
                             result.fgcolor = node.data.Value.value;
                         } else if (std.mem.eql(u8, "shape", param_name)) {
                             result.shape = node.data.Value.value;
+                        } else if (std.mem.eql(u8, "note", param_name)) {
+                            result.note = node.data.Value.value;
                         }
                     },
                     EdgeParams => {
@@ -289,6 +292,16 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
 
     // end attr-list/node
     try writer.writeAll("];\n");
+
+    // Check for note:
+    if(instanceParams.note) |note| {
+        // TODO: generate node name (comment_NN?)? Or does dot support anonymous "inline"-nodes?
+        try writer.print(
+            \\note[label="{s}",fillcolor=#ffffaa,shape=note];
+            \\note -> {s}[arrowtail=none,arrowhead=none,style=dashed];
+            \\
+        , .{note, instance.name});
+    }
 }
 
 fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *DifNodeMap) anyerror!void {
