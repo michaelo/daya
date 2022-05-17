@@ -69,16 +69,21 @@ test "writeRelationshipFields" {
 const DifNodeMap = std.StringHashMap(*DifNode);
 
 // Parse the entire node-tree from <node>, populate the maps with references to nodes, edges and instantiations indexed by their .name
-fn findAllEdgesNodesAndInstances(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) error{OutOfMemory}!void {
+fn findAllEdgesNodesAndInstances(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) error{OutOfMemory, NodeWithNoName}!void {
+    var node_name = node.name orelse {
+        // Found node with no name... is it even possible at this stage?
+        return error.NodeWithNoName;
+    };
+
     switch (node.node_type) {
         .Node => {
-            try nodeMap.put(node.name.?, node);
+            try nodeMap.put(node_name, node);
         },
         .Edge => {
-            try edgeMap.put(node.name.?, node);
+            try edgeMap.put(node_name, node);
         },
         .Instantiation => {
-            try instanceMap.put(node.name.?, node);
+            try instanceMap.put(node_name, node);
         },
         else => {},
     }
@@ -87,6 +92,7 @@ fn findAllEdgesNodesAndInstances(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: 
         try findAllEdgesNodesAndInstances(child, nodeMap, edgeMap, instanceMap);
     }
 
+    // TODO: Loop on generation, recurse only on child?
     if (node.next_sibling) |next| {
         try findAllEdgesNodesAndInstances(next, nodeMap, edgeMap, instanceMap);
     }
@@ -121,11 +127,13 @@ const GroupParams = struct {
     label: ?[]const u8 = null,
     layout: ?[]const u8 = null,
     bgcolor: ?[]const u8 = null,
+    note: ?[]const u8 = null,
 };
 
 // Take a string and with simple heuristics try to make it more readable (replaces _ with space upon print)
 // TBD: Capitalize all follow-space-chars?
 // TODO: Support unicode properly
+// TODO: Support auto-spacing only, in case of edges. Then +autocap for nodes
 fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8) !void {
     const State = enum {
         space,
@@ -207,6 +215,8 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
                             result.bgcolor = node.data.Value.value;
                         } else if (std.mem.eql(u8, "layout", param_name)) {
                             result.layout = node.data.Value.value;
+                        } else if (std.mem.eql(u8, "note", param_name)) {
+                            result.note = node.data.Value.value;
                         }
                     },
                     else => {
@@ -400,11 +410,28 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
             },
             .Group => {
                 // Recurse on groups
-                try writer.print("subgraph cluster_{s} {{\n", .{node.name});
                 if (node.first_child) |child| {
+                    try writer.print("subgraph cluster_{s} {{\n", .{node.name});
+
+                    // Invisible point inside group, used to create edges to/from groups
+                    try writer.print("invis_group_{s} [shape=point,style=invis,height=0,width=0];", .{node.name});
                     try renderGeneration(Writer, writer, child, nodeMap, edgeMap, instanceMap);
+                    try writer.writeAll("}\n");
+
+                    // Checking group-fields in case of label, which shall be created outside of group
+                    var groupParams: GroupParams = .{};
+                    try getFieldsFromChildSet(@TypeOf(groupParams), child, &groupParams);
+                    
+                    // Check for note:
+                    if(groupParams.note) |note| {
+                        var note_idx = @ptrToInt(instance);
+                        try writer.print(
+                            \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
+                            \\note_{0x} -> invis_group_{2s}[lhead=cluster_{2s},arrowtail=none,arrowhead=none,style=dashed];
+                            \\
+                        , .{note_idx, note, node.name});
+                    }
                 }
-                try writer.writeAll("}\n");
             },
             else => {},
         }
@@ -442,8 +469,7 @@ pub fn difToDot(comptime Writer: type, writer: Writer, allocator: std.mem.Alloca
 
     try findAllEdgesNodesAndInstances(rootNode, &nodeMap, &edgeMap, &instanceMap);
 
-    try writer.writeAll("strict digraph {\n");
-
+    try writer.writeAll("strict digraph {\ncompound=true;\n");
     try renderGeneration(Writer, writer, rootNode, &nodeMap, &edgeMap, &instanceMap);
 
     try writer.writeAll("}\n");
