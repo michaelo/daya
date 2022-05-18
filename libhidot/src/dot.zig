@@ -304,7 +304,7 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
     var nodeName = instance.data.Instantiation.target;
 
     var node = nodeMap.get(nodeName) orelse {
-        ctx.printError(instance, "No node {s} found\n", .{nodeName});
+        ctx.printError(instance, "No node '{s}' found\n", .{nodeName});
         return RenderError.NoSuchNode;
     };
 
@@ -369,7 +369,7 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
     }
 }
 
-fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *DifNodeMap) anyerror!void {
+fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *DifNodeMap, groupMap: *DifNodeMap) anyerror!void {
     if (instance.node_type != .Relationship) {
         return RenderError.UnexpectedType;
     }
@@ -378,18 +378,18 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
     var edgeName = instance.data.Relationship.edge;
     var targetNodeName = instance.data.Relationship.target;
 
-    var sourceNode = instanceMap.get(sourceNodeName) orelse {
-        ctx.printError(instance, "No instance {s} found\n", .{sourceNodeName});
+    var sourceNode = instanceMap.get(sourceNodeName) orelse groupMap.get(sourceNodeName) orelse {
+        ctx.printError(instance, "No instance or group '{s}' found\n", .{sourceNodeName});
         return error.NoSuchInstance;
     };
 
-    var targetNode = instanceMap.get(targetNodeName) orelse {
-        ctx.printError(instance, "No instance {s} found\n", .{targetNodeName});
+    var targetNode = instanceMap.get(targetNodeName) orelse groupMap.get(targetNodeName) orelse {
+        ctx.printError(instance, "No instance or group '{s}' found\n", .{targetNodeName});
         return error.NoSuchInstance;
     };
 
     var edge = edgeMap.get(edgeName) orelse {
-        ctx.printError(instance, "No edge {s} found\n", .{edgeName});
+        ctx.printError(instance, "No edge '{s}' found\n", .{edgeName});
         return error.NoSuchEdge;
     };
 
@@ -415,6 +415,16 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
             try printPrettify(Writer, ctx.writer, label, .{});
             try ctx.print("\",", .{});
         }
+    }
+
+    // if source is group:
+    if(sourceNode.node_type == .Group) {
+        try ctx.print("ltail=cluster_{s},", .{sourceNodeName});
+    }
+
+    // if target is group:
+    if(targetNode.node_type == .Group) {
+        try ctx.print("lhead=cluster_{s},", .{targetNodeName});
     }
 
     // Style
@@ -455,7 +465,7 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
 }
 
 /// Recursive
-fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) anyerror!void {
+fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap, groupMap: *DifNodeMap) anyerror!void {
     var node: *DifNode = instance;
 
     // Iterate over siblings
@@ -465,7 +475,7 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
                 try renderInstantiation(Writer, ctx, node, nodeMap);
             },
             .Relationship => {
-                try renderRelationship(Writer, ctx, node, instanceMap, edgeMap);
+                try renderRelationship(Writer, ctx, node, instanceMap, edgeMap, groupMap);
             },
             .Group => {
                 // Recurse on groups
@@ -474,7 +484,7 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
 
                     // Invisible point inside group, used to create edges to/from groups
                     try ctx.print("{s} [shape=point,style=invis,height=0,width=0];", .{node.name});
-                    try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap);
+                    try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap, groupMap);
                     try ctx.print("}}\n", .{});
 
                     // Checking group-fields in case of label, which shall be created outside of group
@@ -517,6 +527,6 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
 
 pub fn difToDot(comptime Writer: type, ctx: *DotContext(Writer), root_node: *DifNode, map_set: DifNodeMapSet) !void {
     try ctx.print("strict digraph {{\ncompound=true;\n", .{});
-    try renderGeneration(Writer, ctx, root_node, map_set.node_map, map_set.edge_map, map_set.instance_map);
+    try renderGeneration(Writer, ctx, root_node, map_set.node_map, map_set.edge_map, map_set.instance_map, map_set.group_map);
     try ctx.print("}}\n", .{});
 }
