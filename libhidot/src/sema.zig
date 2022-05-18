@@ -6,7 +6,7 @@ const testing = std.testing;
 const DifNodeMap = std.StringHashMap(*dif.DifNode);
 
 const SemaError = error {
-    NodeWithNoName, Duplicate, OutOfMemory
+    NodeWithNoName, Duplicate, OutOfMemory, InvalidField
 };
 
 /// TODO: Raise out of sema to be a generic document context?
@@ -34,6 +34,23 @@ fn SemaContext() type {
                 .group_map = DifNodeMap.init(allocator),
                 .src_buf = src_buf,
             };
+        }
+
+        fn printError(self: *Self, node: *dif.DifNode, comptime fmt: []const u8, args: anytype) void {
+            const errPrint = std.io.getStdErr().writer().print;
+            var lc = utils.idxToLineCol(self.src_buf, node.initial_token.?.start);
+            errPrint("ERROR ({d}:{d}): ", .{lc.line, lc.col}) catch {};
+            errPrint(fmt, args) catch {};
+            errPrint("\n", .{}) catch {};
+            utils.dumpSrcChunkRef(self.src_buf, node.initial_token.?.start);
+            errPrint("\n", .{}) catch {};
+
+            // Print ^ at start of symbol
+            var i: usize = 0;
+            if(lc.col > 0) while(i<lc.col-1): (i+=1) {
+                errPrint(" ", .{}) catch {};
+            };
+            errPrint("^\n", .{}) catch {};
         }
 
         pub fn deinit(self: *Self) void {
@@ -67,7 +84,61 @@ pub fn doSema(allocator: std.mem.Allocator, dif_root: *dif.DifNode, src_buf: []c
     return ctx;
 }
 
+fn any(haystack: [][]const u8, needle: []const u8) bool {
+    var found_any = false;
+    for(haystack) |candidate| {
+        if(std.mem.eql(u8, candidate, needle)) {
+            found_any = true;
+        }
+    }
+    return found_any;
+}
 
+test "any" {
+    comptime var haystack = [_][]const u8{"label"};
+    try testing.expect(any(haystack[0..], "label"));
+    try testing.expect(!any(haystack[0..], "lable"));
+}
+
+fn isValidNodeField(field: []const u8) bool {
+    comptime var valid_fields = [_][]const u8{"label", "bgcolor", "fgcolor", "shape", "node"};
+    return any(valid_fields[0..], field);
+}
+
+fn isValidEdgeField(field: []const u8) bool {
+    comptime var valid_fields = [_][]const u8{"label", "edge_style", "source_symbol", "target_symbol", "source_label", "target_label"};
+    return any(valid_fields[0..], field);
+}
+
+/// Verifies that all siblings' names passes the 'verificator'
+fn verifyFields(ctx: *SemaContext(), first_sibling: *dif.DifNode, verificator: fn(field: []const u8) bool) !void {
+    var current = first_sibling;
+
+    // Iterate over sibling set
+    while(true) {
+        switch(current.node_type) {
+            .Value => {
+                if(!verificator(current.name.?)) {
+                    ctx.printError(current, "Unsupported parameter: '{s}'", .{current.name});
+                    return error.InvalidField;
+                }
+            },
+            else => {
+                ctx.printError(current, "Unsupported child-type '{s}' for: {s}", .{@TypeOf(current.node_type), current.name});
+                return error.InvalidField;
+            }
+        }
+
+        if (current.next_sibling) |next| {
+            current = next;
+        } else {
+            break;
+        }
+    }
+}
+
+/// Verify integrity of dif-graph. Fails on duplicate definitions and invalid fields.
+/// Aborts at first error.
 fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!void {
     var current = node;
 
@@ -80,37 +151,58 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
         switch (current.node_type) {
             .Node => {
                 if(ctx.node_map.get(node_name)) |_| {
-                    utils.analysisError(ctx.src_buf, current.initial_token.?.start, "Duplicate node definition, {s} already defined.", .{node_name});
+                    ctx.printError(current, "Duplicate node definition, {s} already defined.", .{node_name});
                     return error.Duplicate;
                 }
+
+                if(current.first_child) |child| {
+                    try verifyFields(ctx, child, isValidNodeField);
+                }
+
                 try ctx.node_map.put(node_name, current);
             },
             .Edge => {
                 if(ctx.edge_map.get(node_name)) |_| {
-                    utils.analysisError(ctx.src_buf, current.initial_token.?.start, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
                     return error.Duplicate;
                 }
+
+                if(current.first_child) |child| {
+                    try verifyFields(ctx, child, isValidEdgeField);
+                }
+
                 try ctx.edge_map.put(node_name, current);
             },
             .Instantiation => {
                 if(ctx.instance_map.get(node_name)) |_| {
-                    utils.analysisError(ctx.src_buf, current.initial_token.?.start, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
                     return error.Duplicate;
                 } else if(ctx.group_map.get(node_name)) |_| {
-                    utils.analysisError(ctx.src_buf, current.initial_token.?.start, "A group with name {s} already defined, can't create instance with same name.", .{node_name});
+                    ctx.printError(current, "A group with name {s} already defined, can't create instance with same name.", .{node_name});
                     return error.Duplicate;
                 }
+
+                if(current.first_child) |child| {
+                    try verifyFields(ctx, child, isValidNodeField);
+                }
+
                 try ctx.instance_map.put(node_name, current);
             },
             .Group => {
                 if(ctx.group_map.get(node_name)) |_| {
-                    utils.analysisError(ctx.src_buf, current.initial_token.?.start, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
                     return error.Duplicate;
                 } else if(ctx.instance_map.get(node_name)) |_| {
-                    utils.analysisError(ctx.src_buf, current.initial_token.?.start, "An instance with name {s} already defined, can't create group with same name.", .{node_name});
+                    ctx.printError(current, "An instance with name {s} already defined, can't create group with same name.", .{node_name});
                     return error.Duplicate;
                 }
+                // TODO: Verify valid group fields
                 try ctx.group_map.put(node_name, current);
+            },
+            .Relationship => {
+                if(current.first_child) |child| {
+                    try verifyFields(ctx, child, isValidEdgeField);
+                }
             },
             else => {},
         }
@@ -200,4 +292,43 @@ test "sema does not fail on well-formed hidot" {
         \\compA uses libA;
         \\compB depends_on compA;
     ));
+}
+
+test "sema fails on invalid fields for node" {
+    try testing.expectError(error.InvalidField, testSema(
+        \\node Component {
+        \\    lable="misspelled";
+        \\}
+        ));
+}
+
+test "sema fails on invalid fields for instance" {
+    try testing.expectError(error.InvalidField, testSema(
+        \\node Component {
+        \\    label="label here";
+        \\}
+        \\mynode: Component {
+        \\    lable="misspelled";
+        \\}
+        ));
+}
+
+test "sema fails on invalid fields for edge" {
+    try testing.expectError(error.InvalidField, testSema(
+        \\edge owns {
+        \\    lable="misspelled";
+        \\}
+        ));
+}
+
+test "sema fails on invalid fields for relationship" {
+    try testing.expectError(error.InvalidField, testSema(
+        \\node Component;
+        \\edge owns;
+        \\mynode: Component;
+        \\mynode2: Component;
+        \\mynode owns mynode2 {
+        \\    lable="misspelled";
+        \\}
+        ));
 }

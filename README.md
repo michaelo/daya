@@ -171,17 +171,14 @@ TODO
 ---------
 * Integrate dot / libdot
     * including libs for png and svg?
-* Implement a semantic step to verify that the DIF makes sense
-* Improve error messages: e.g. using unsupporter target_symbol gives no specific info. Relationship with non-existent instance should pinpoint line, not only name.
-* Currently a lot of the defaults is handling within dot.zig - this is error-prone if we were to change graphing-backend
+* Currently a lot of the defaults is handled within dot.zig - this is error-prone if we were to change graphing-backend
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Implement import-functionality
     * Explicitly define behaviour wrt duplicate definitions; shall the latter be invalid behaviour, or shall they be fused? Either simply adding children, or explicitly checking for type and override values.
-    * Support "comments"/"annotations": a post-it-like block with text tied to a particular instantiation or relationship.
     * Simplify syntax: allow } as EOS. Don't require quotes around #-colors.
 * Finish v1 hidot-syntax: what is scope?
-* Ensure compilator supports entire hidot-syntax
+    * Ensure compilator supports entire hidot-syntax
 * Lower importance:
     * Implement web service
     * Implement frontend
