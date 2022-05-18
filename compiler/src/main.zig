@@ -187,8 +187,8 @@ pub fn main() !void {
     };
 
     // Arguments:
-    //   Input source (file or stdin)
-    //   Output (file or stdout)
+    //   Input source (file or stdin (eventually))
+    //   Output (file or stdout (eventually))
     //   Output format (dot, png, svg)
     // 
     // Sequence:
@@ -254,6 +254,7 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
     };
 }
 
+
 // Launches a child process to call dot, assumes it's available in path
 fn callDot(input_file: []const u8, output_file: []const u8, output_format: OutputFormat) !void {
     var allocator = std.testing.allocator;
@@ -270,8 +271,14 @@ fn callDot(input_file: []const u8, output_file: []const u8, output_format: Outpu
                                 .max_output_bytes = 128,
                             });
 
-    // TODO: There are situations where dot fails where this doesn't occur: 
-    if(result.term.Exited != 0) {
+    var got_error = switch(result.term) {
+        .Stopped => |code| code > 0,
+        .Exited => |code| code > 0,
+        .Signal => true,
+        .Unknown => true,
+    };
+
+    if(got_error) {
         debug("dot returned error: {s}\n", .{result.stderr});
         debug("Generate .dot-file instead to debug generated data. This is most likely a bug in hidot.", .{});
         return error.ProcessError;
