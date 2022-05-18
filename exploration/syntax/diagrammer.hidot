@@ -1,91 +1,90 @@
 node Default {
-    label: "all defaults here"
+    label="all defaults here";
 }
 
 node Interface {
-    label: "[Interface]"
-    shape: diamond
-    color: #000000
-    background: #AAAAAA
+    label="[Interface]";
+    shape=diamond;
+    color="#000000";
+    background="#AAAAAA";
 }
 
-
 node Module {
-    label: "[Module]"
-    shape: box
-    color: #000000
-    background: #DDDDFF
+    label="[Module]";
+    shape=box;
+    color=#000000;
+    background=#DDDDFF;
 }
 
 node Data {
-    shape: cylinder
-    color: #FF0000
-    background: #99FF99
+    shape=cylinder;
+    color=#FF0000;
+    background=#99FF99;
 }
 
 node Actor {
-    label: "[Actor]"
-    shape: polygon
-    color: #000000
-    background: #ffffff
+    label="[Actor]";
+    shape=polygon;
+    color="#000000";
+    background="#ffffff";
 }
 
 node ExternalDependency {
-    label: "[External Dep]"
-    shape: ellipse
+    label="[External Dep]";
+    shape=ellipse;
 }
 edge NoLabel {
-    style: solid
+    style=solid;
 }
 
 edge uses {
-    label: "Uses"
-    style: solid
-    targetSymbol: arrow_open
+    label="Uses";
+    style=solid;
+    target_symbol=arrow_open;
 }
 
 edge implements {
-    label: "Implements"
-    style: dashed
-    targetSymbol: arrow_open
+    label="Implements";
+    style=dashed;
+    target_symbol=arrow_open;
 }
 
 edge depends_on {
-    label: "Depends on"
-    style: solid
-    targetSymbol: arrow_open
+    label="Depends on";
+    style=solid;
+    target_symbol=arrow_open;
 }
 
 edge is_owned_by {
-    label: "Owned by"
-    style: dashed
-    sourceSymbol: arrow_closed
+    label="Owned by";
+    style=dashed;
+    source_symbol=arrow_closed;
 }
 
 edge knows_about {
-    label: "Knows about",
-    style: dashed
-    targetSymbol: arrow_filled
+    label="Knows about";
+    style=dashed;
+    target_symbol=arrow_filled;
 }
 
 
 // Units
-User: Actor
-HidotFile: Data
-Cli: Interface
-Tokenizer: Module
-Dif: Module
-DotWriter: Module
-Dot: ExternalDependency
+User: Actor;
+HidotFile: Data;
+Cli: Interface;
+Tokenizer: Module;
+Dif: Module;
+DotWriter: Module;
+Dot: ExternalDependency;
 
 
 // Relationships
-User uses Cli
-HidotFile is_owned_by User
-Cli depends_on Tokenizer 
-Cli depends_on Dif 
-Cli depends_on DotWriter
-Cli depends_on Dot
-DotWriter knows_about Dot
-Dif depends_on Tokenizer
+User uses Cli;
+HidotFile is_owned_by User;
+Cli depends_on Tokenizer;
+Cli depends_on Dif;
+Cli depends_on DotWriter;
+Cli depends_on Dot;
+DotWriter knows_about Dot;
+Dif depends_on Tokenizer;
 

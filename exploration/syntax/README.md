@@ -10,12 +10,12 @@ I propose supporting two dialects:
 HiDot
 -----
 Features:
-* Minimalistic
+* Minimalistic, opinionated
 * Consistent and elegant
 * Intuitive / possible to read as text
-* No waste (no redundant characters to express logics)
+* Limit waste (no redundant characters to express logics)
 * Possible to create types to be used on nodes and edges
-* Possible import types
+* Possible import files with e.g. types or even whole charts or sections thereof
 
 
 Compiler thoughts

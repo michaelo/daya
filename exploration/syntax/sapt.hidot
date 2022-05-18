@@ -1,64 +1,37 @@
-// Two definition blocks:
-// Type defines whether it generates a block or a connection
-// <node|edge> <name> {
-//     key1:value1
-//     key2:value2
-//     key3:value3
-// }
-
-// Include, path relative to self
 // @definitions.hidot
 
 // Generic definitions
 node Module {
-    label: Module
-    shape: square
+    label="<Module>";
+    shape=square;
 }
 
-node Subsystem {
-    label: Subsystem
-    shape: roundedsquare
-} 
-
+edge depends_on;
+edge implements;
 
 // Declarations:
 // <Name of instance>:<name>
-Cli:Module
-Help:Module
-Parser:Module
-Pretty:Module
 
-// Containers - will render inner components inside the outer
-Frontend: Subsystem {
-    Cli
-    Help
+// Groups/containers - will render inner components inside the outer
+group Frontend {
+    label="Frontend\n<Subsystem>";
+    shape=tullball;
+
+    Cli: Module;
+    Help: Module;
 }
 
-Backend: Subsystem {
-    Parser
-    Pretty
+group Backend {
+    label="Backend\n<Subsystem>";
+    shape=tullball;
+
+    Parser: Module;
+    Pretty: Module;
 }
 
 
 // Relationships
 // <nodetype> <edgetype> <nodetype>
-Cli Implements Help
-Cli DependsOn Parser
-Cli DependsOn Pretty
-
-
-
-// TBD:
-// Shall a node-instance be allowed more than once in a given diagram?
-// How to import definitions?
-
-
-
-Tokens:
-"node": Node block start
-"edge": Edge block start
-"{": brace_start
-"}": brace_end
-"\"": quote
-":": colon
-"->": relates to
+Cli implements Help;
+Cli depends_on Parser;
+Cli depends_on Pretty;

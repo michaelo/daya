@@ -3,70 +3,12 @@ const std = @import("std");
 const main = @import("main.zig");
 const bufwriter = @import("bufwriter.zig");
 const utils = @import("utils.zig");
+const printPrettify = utils.printPrettify;
 const testing = std.testing;
 const debug = std.debug.print;
 
 const dif = @import("dif.zig");
 const DifNode = dif.DifNode;
-
-test "writeNodeFields" {
-    // Go through each fields and verify that it gets converted as expected
-    var buf: [1024]u8 = undefined;
-    var buf_context = bufwriter.ArrayBuf {
-        .buf = buf[0..]
-    };
-
-    var writer = buf_context.writer();
-
-    var source =
-        \\node MyNode {
-        \\    label="My label";
-        \\    fgcolor="#000000";
-        \\    bgcolor="#FF0000";
-        \\}
-        \\Node: MyNode;
-        \\
-        ;
-
-    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
-    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
-    // basic flow of logic is happening
-    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "\"Node\"") != null);
-    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "My label") != null);
-    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "bgcolor=\"#FF0000\"") != null);
-    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "color=\"#000000\"") != null);
-}
-
-test "writeRelationshipFields" {
-    // Go through each fields and verify that it gets converted as expected
-    var buf: [1024]u8 = undefined;
-    var context = bufwriter.ArrayBuf {
-        .buf = buf[0..]
-    };
-
-    var writer = context.writer();
-
-    var source =
-        \\node MyNode {}
-        \\edge Uses {
-        \\    label="Edge label";
-        \\    source_symbol=arrow_filled;
-        \\    target_symbol=arrow_open;
-        \\}
-        \\NodeA: MyNode;
-        \\NodeB: MyNode;
-        \\NodeA Uses NodeB;
-        \\
-        ;
-
-    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
-    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
-    // basic flow of logic is happening
-    try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);
-    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowhead=vee") != null);
-    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowtail=normal") != null);
-}
-
 const DifNodeMap = std.StringHashMap(*DifNode);
 
 const RenderError = error{
@@ -75,6 +17,14 @@ const RenderError = error{
     NoSuchEdge,
     NoSuchInstance,
     OutOfMemory,
+};
+
+/// Pre-populated sets of indexes to the different difnodes
+pub const DifNodeMapSet = struct{
+    node_map: *DifNodeMap,
+    edge_map: *DifNodeMap,
+    instance_map: *DifNodeMap,
+    group_map: *DifNodeMap,
 };
 
 const NodeParams = struct {
@@ -100,76 +50,6 @@ const GroupParams = struct {
     bgcolor: ?[]const u8 = null,
     note: ?[]const u8 = null,
 };
-
-// Take a string and with simple heuristics try to make it more readable (replaces _ with space upon print)
-// TODO: Support unicode properly
-fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8, comptime opts: struct {
-    do_caps: bool = false,
-}) !void {
-    const State = enum {
-        space,
-        plain,
-    };
-    var state: State = .space;
-    for (label) |c| {
-        var fc = blk: {
-            switch (state) {
-                // First char of string or after space
-                .space => switch (c) {
-                    '_', ' ' => break :blk ' ',
-                    else => {
-                        state = .plain;
-                        break :blk if(opts.do_caps) std.ascii.toUpper(c) else c;
-                    },
-                },
-                .plain => switch (c) {
-                    '_', ' ' => {
-                        state = .space;
-                        break :blk ' ';
-                    },
-                    else => break :blk c,
-                },
-            }
-        };
-        try writer.print("{c}", .{fc});
-    }
-}
-
-test "printPrettify" {
-    // Setup custom writer with buffer we can inspect
-    var buf: [128]u8 = undefined;
-    var bufctx = bufwriter.ArrayBuf {
-        .buf = buf[0..]
-    };
-
-    var writer = bufctx.writer();
-
-    try printPrettify(@TypeOf(writer), writer, "label", .{});
-    try testing.expectEqualStrings("label", bufctx.slice());
-    bufctx.reset();
-
-    try printPrettify(@TypeOf(writer), writer, "label", .{.do_caps=true});
-    try testing.expectEqualStrings("Label", bufctx.slice());
-    bufctx.reset();
-
-    try printPrettify(@TypeOf(writer), writer, "label_part", .{});
-    try testing.expectEqualStrings("label part", bufctx.slice());
-    bufctx.reset();
-
-    try printPrettify(@TypeOf(writer), writer, "Hey Der", .{});
-    try testing.expectEqualStrings("Hey Der", bufctx.slice());
-    bufctx.reset();
-
-    try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{}); // TODO: unicode not handled
-    try testing.expectEqualStrings("æøå æøå", bufctx.slice());
-    bufctx.reset();
-
-    // Not working
-    // try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{.do_caps=true}); // TODO: unicode not handled
-    // try testing.expectEqualStrings("Æøå Æøå", bufctx.slice());
-    // bufctx.reset();
-}
-
 
 pub fn DotContext(comptime Writer: type) type {
     return struct {
@@ -208,20 +88,7 @@ pub fn DotContext(comptime Writer: type) type {
     };
 }
 
-test "continue here" {
-    testing.expect(false);
-}
-
-/// Pre-populated sets of indexes to the different difnodes
-pub const DifNodeMapSet = struct{
-    node_map: *DifNodeMap,
-    edge_map: *DifNodeMap,
-    instance_map: *DifNodeMap,
-    group_map: *DifNodeMap,
-};
-
 /// Extracts a set of predefined key/values, based on the particular ParamsType
-/// TODO: How to best output or return error when e.g. parsing enum from string? Pass in a DotContext with reference to source buffer, then print from inside?
 fn getFieldsFromChildSet(comptime Writer: type, ctx: *DotContext(Writer), comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) !void {
     var node = first_sibling;
     while (true) {
@@ -529,4 +396,63 @@ pub fn difToDot(comptime Writer: type, ctx: *DotContext(Writer), root_node: *Dif
     try ctx.print("strict digraph {{\ncompound=true;\n", .{});
     try renderGeneration(Writer, ctx, root_node, map_set.node_map, map_set.edge_map, map_set.instance_map, map_set.group_map);
     try ctx.print("}}\n", .{});
+}
+
+
+test "writeNodeFields" {
+    // Go through each fields and verify that it gets converted as expected
+    var buf: [1024]u8 = undefined;
+    var buf_context = bufwriter.ArrayBuf {
+        .buf = buf[0..]
+    };
+
+    var writer = buf_context.writer();
+
+    var source =
+        \\node MyNode {
+        \\    label="My label";
+        \\    fgcolor="#000000";
+        \\    bgcolor="#FF0000";
+        \\}
+        \\Node: MyNode;
+        \\
+        ;
+
+    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
+    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
+    // basic flow of logic is happening
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "\"Node\"") != null);
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "My label") != null);
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "bgcolor=\"#FF0000\"") != null);
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "color=\"#000000\"") != null);
+}
+
+test "writeRelationshipFields" {
+    // Go through each fields and verify that it gets converted as expected
+    var buf: [1024]u8 = undefined;
+    var context = bufwriter.ArrayBuf {
+        .buf = buf[0..]
+    };
+
+    var writer = context.writer();
+
+    var source =
+        \\node MyNode {}
+        \\edge Uses {
+        \\    label="Edge label";
+        \\    source_symbol=arrow_filled;
+        \\    target_symbol=arrow_open;
+        \\}
+        \\NodeA: MyNode;
+        \\NodeB: MyNode;
+        \\NodeA Uses NodeB;
+        \\
+        ;
+
+    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
+    // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
+    // basic flow of logic is happening
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowhead=vee") != null);
+    try testing.expect(std.mem.indexOf(u8, context.slice(), "arrowtail=normal") != null);
 }

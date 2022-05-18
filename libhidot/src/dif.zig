@@ -5,67 +5,53 @@ const Token = @import("tokenizer.zig").Token;
 const Tokenizer = @import("tokenizer.zig").Tokenizer;
 const TokenType = @import("tokenizer.zig").TokenType;
 const tokenizerDump = @import("tokenizer.zig").dump;
-const assert = std.debug.assert;
 const debug = std.debug.print;
 const testing = std.testing;
 
 const initBoundedArray = utils.initBoundedArray;
 
-const ParseError = error {
-    UnexpectedToken
+const ParseError = error{ UnexpectedToken, InvalidValue };
+
+const DifNodeType = enum {
+    Edge,
+    Node,
+    Group,
+    Layer,
+    Instantiation,
+    Relationship,
+    Parameter, // key=value
+    Value,
 };
 
-pub const Color = struct {
-    r: f16,
-    g: f16,
-    b: f16,
-    a: f16,
+pub const DifNode = struct {
+    const Self = @This();
 
-    fn hexToFloat(color: []const u8) f16 {
-        assert(color.len == 2);
-        var buf: [1]u8 = undefined;
-        _ = std.fmt.hexToBytes(buf[0..], color) catch 0;
-        return @intToFloat(f16, buf[0]) / 255;
-    }
+    // // Common fields
+    node_type: DifNodeType,
+    first_child: ?*Self = null,
+    next_sibling: ?*Self = null,
+    initial_token: ?Token = null, // Reference back to source
+    name: ?[]const u8 = null,
+    // TODO: reference to source buffer (and source file name?), as nodes may origin from separate files.
 
-    pub fn fromHexstring(color: []const u8) Color {
-        assert(color.len == 7 or color.len == 9);
-        // const
-        if (color.len == 7) {
-            return .{
-                .r = hexToFloat(color[1..3]),
-                .g = hexToFloat(color[3..5]),
-                .b = hexToFloat(color[5..7]),
-                .a = 1.0,
-            };
-        } else {
-            return .{
-                .r = hexToFloat(color[1..3]),
-                .g = hexToFloat(color[3..5]),
-                .b = hexToFloat(color[5..7]),
-                .a = hexToFloat(color[7..9]),
-            };
-        }
-    }
-
-    pub fn write(_: *Color, writer: anytype) void {
-        writer.print("#{s}{s}{s}", .{ "FF", "00", "00" }) catch unreachable;
-    }
+    data: union(DifNodeType) {
+        Edge: struct {},
+        Node: struct {},
+        Group: struct {},
+        Layer: struct {},
+        Instantiation: struct {
+            target: []const u8,
+        },
+        Relationship: struct {
+            edge: []const u8,
+            target: []const u8,
+        },
+        Parameter: struct {},
+        Value: struct {
+            value: []const u8,
+        },
+    },
 };
-
-test "Color.fromHexstring" {
-    var c1 = Color.fromHexstring("#FFFFFF");
-    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.r, 0.01);
-    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.g, 0.01);
-    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.b, 0.01);
-    try testing.expectApproxEqAbs(@as(f16, 1.0), c1.a, 0.01);
-
-    var c2 = Color.fromHexstring("#006699FF");
-    try testing.expectApproxEqAbs(@as(f16, 0.0), c2.r, 0.01);
-    try testing.expectApproxEqAbs(@as(f16, 0.4), c2.g, 0.01);
-    try testing.expectApproxEqAbs(@as(f16, 0.6), c2.b, 0.01);
-    try testing.expectApproxEqAbs(@as(f16, 1.0), c2.a, 0.01);
-}
 
 // General strategy
 // For text: We start with simply storing slices of the input-data in the Dif
@@ -105,78 +91,38 @@ pub const EdgeEndStyle = enum {
     }
 };
 
-const DifNodeType = enum {
-    // Unknown,
-    Edge,
-    Node,
-    Group,
-    Layer,
-    // Layout,
-    Instantiation,
-    Relationship,
-    Parameter, // key=value
-    Value,
-};
-
-pub const DifNode = struct {
-    const Self = @This();
-
-    // // Common fields
-    node_type: DifNodeType,
-    first_child: ?*Self = null,
-    next_sibling: ?*Self = null,
-    initial_token: ?Token = null, // Reference back to source
-    name: ?[]const u8 = null,
-
-    data: union(DifNodeType) {
-        // TODO: Have a top-level "Unit" that represents an input-file?
-        //       To easily accomodade chaining multiple includes.
-        Edge: struct {},
-        Node: struct {},
-        Group: struct {},
-        // Layout: struct {},
-        Layer: struct {},
-        Instantiation: struct {
-            target: []const u8,
-        },
-        Relationship: struct {
-            edge: []const u8,
-            target: []const u8,
-        },
-        Parameter: struct {},
-        Value: struct {
-            value: []const u8,
-        },
-        // Unknown: struct {},
-    },
-};
-
 const DififierState = enum {
     start,
     kwnode,
     kwedge,
-    data, // To be used by any type supporting {}-sets
     kwgroup,
-    kwlayout,
     kwlayer,
+    data, // To be used by any type supporting {}-sets
     definition, // Common type for any non-keyword-definition
 };
 
-/// Entry-function to module. Returns reference to first top-level node in graph
-/// TODO: Implement support for a dynamicly allocatable nodepool
+/// Entry-function to module. Returns reference to first top-level node in graph, given a tokenizer.
 pub fn tokensToDif(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer) !*DifNode {
+    var first_i = nodePool.slice().len;
     parseTokensRecursively(MaxNodes, nodePool, tokenizer, null) catch {
         return error.ParseError;
     };
 
-    if(nodePool.slice().len < 1) {
+    if (nodePool.slice().len <= first_i) {
         return error.NothingFound;
     }
 
-    return &nodePool.slice()[0];
+    return &nodePool.slice()[first_i];
 }
 
-pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
+/// Entry-function to module. Returns reference to first top-level node in graph, given a text buffer.
+pub fn bufToDif(comptime MaxNodes: usize, node_pool: *std.BoundedArray(DifNode, MaxNodes), buf: []const u8) !*DifNode {
+    var tokenizer = Tokenizer.init(buf);
+    return try tokensToDif(MaxNodes, node_pool, &tokenizer);
+}
+
+/// TODO: Implement support for a dynamicly allocatable nodepool
+pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
     var state: DififierState = .start;
 
     var prev_sibling: ?*DifNode = null;
@@ -202,13 +148,13 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                         state = .definition;
                     },
                     .keyword_edge, .keyword_node, .keyword_layer, .keyword_group => {
-                        
+
                         // Create node for edge, with value=name-slice
                         // If data-chunk follows; recurse and pass current node as parent
-                        var node = nodePool.addOneAssumeCapacity();
+                        var node = node_pool.addOneAssumeCapacity();
 
-                        if(parent) |realparent| {
-                            if(realparent.first_child == null) {
+                        if (parent) |realparent| {
+                            if (realparent.first_child == null) {
                                 realparent.first_child = node;
                             }
                         }
@@ -216,36 +162,20 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                         // Get label
                         var initial_token = tok;
                         tok = tokenizer.nextToken();
-                        if(tok.typ != .identifier) {
+                        if (tok.typ != .identifier) {
                             utils.parseError(tokenizer.buf, tok.start, "Expected identifier, got token type '{s}'", .{@tagName(tok.typ)});
                             return error.UnexpectedToken;
                         }
 
-                        node.* =  switch(initial_token.typ) {
-                            .keyword_edge => DifNode{
-                                .node_type = .Edge,
-                                .name = tok.slice,
-                                .initial_token = initial_token,
-                                .data = .{ .Edge = .{} } },
-                            .keyword_node => DifNode{
-                                .node_type = .Node,
-                                .name = tok.slice,
-                                .initial_token = initial_token,
-                                .data = .{ .Node = .{} } },
-                            .keyword_group => DifNode{
-                                .node_type = .Group,
-                                .name = tok.slice,
-                                .initial_token = initial_token,
-                                .data = .{ .Group = .{} } },
-                            .keyword_layer => DifNode{
-                                .node_type = .Layer,
-                                .name = tok.slice,
-                                .initial_token = initial_token,
-                                .data = .{ .Layer = .{} } },
-                            else => unreachable // as long as this set of cases matches the ones leading to this branch
+                        node.* = switch (initial_token.typ) {
+                            .keyword_edge => DifNode{ .node_type = .Edge, .name = tok.slice, .initial_token = initial_token, .data = .{ .Edge = .{} } },
+                            .keyword_node => DifNode{ .node_type = .Node, .name = tok.slice, .initial_token = initial_token, .data = .{ .Node = .{} } },
+                            .keyword_group => DifNode{ .node_type = .Group, .name = tok.slice, .initial_token = initial_token, .data = .{ .Group = .{} } },
+                            .keyword_layer => DifNode{ .node_type = .Layer, .name = tok.slice, .initial_token = initial_token, .data = .{ .Layer = .{} } },
+                            else => unreachable, // as long as this set of cases matches the ones leading to this branch
                         };
 
-                        if(prev_sibling) |prev| {
+                        if (prev_sibling) |prev| {
                             prev.next_sibling = node;
                         }
                         prev_sibling = node;
@@ -255,7 +185,7 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                             .eos => {},
                             .brace_start => {
                                 // Recurse
-                                try parseTokensRecursively(MaxNodes, nodePool, tokenizer, node);
+                                try parseTokensRecursively(MaxNodes, node_pool, tokenizer, node);
                             },
                             else => {
                                 utils.parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}', expected {{ or ;", .{@tagName(tok.typ)});
@@ -276,24 +206,24 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                 // key/value    : identifier   equal    identifier/string + ;
                 // relationship : identifier identifier identifier        + ; or {}
                 // Att! These can be followed by either ; or {  (e.g. can contain children-set), if so; recurse
-                
+
                 var token1 = tok;
-                assert(token1.typ == .identifier);
+                std.debug.assert(token1.typ == .identifier);
                 var token2 = tokenizer.nextToken();
                 var token3 = tokenizer.nextToken();
 
-                var node = nodePool.addOneAssumeCapacity();
+                var node = node_pool.addOneAssumeCapacity();
 
-                if(parent) |realparent| {
-                    if(realparent.first_child == null) {
+                if (parent) |realparent| {
+                    if (realparent.first_child == null) {
                         realparent.first_child = node;
                     }
                 }
 
-                switch(token2.typ) {
+                switch (token2.typ) {
                     .equal => {
                         // key/value
-                        node.* = DifNode {
+                        node.* = DifNode{
                             .node_type = .Value,
                             .name = token1.slice,
                             .initial_token = token1,
@@ -302,25 +232,20 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                                     // TODO: Currently assuming single-token value for simplicity. This will likely not be the case for e.g. numbers with units
                                     .value = token3.slice,
                                 },
-                            }
+                            },
                         };
                     },
                     .colon => {
                         // instantiation
-                        node.* = DifNode {
-                            .node_type = .Instantiation,
-                            .name = token1.slice,
-                            .initial_token = token1,
-                            .data = .{
-                                .Instantiation = .{
-                                    .target = token3.slice,
-                                },
-                            }
-                        };
+                        node.* = DifNode{ .node_type = .Instantiation, .name = token1.slice, .initial_token = token1, .data = .{
+                            .Instantiation = .{
+                                .target = token3.slice,
+                            },
+                        } };
                     },
                     .identifier => {
                         // relationship
-                        node.* = DifNode {
+                        node.* = DifNode{
                             .node_type = .Relationship,
                             .name = token1.slice, // source... Otherwise create an ID here, and keep source, edge and target all in .data? (TODO)
                             .initial_token = token1,
@@ -329,44 +254,80 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                                     .edge = token2.slice,
                                     .target = token3.slice,
                                 },
-                            }
+                            },
                         };
                     },
                     else => {
                         utils.parseError(tokenizer.buf, token2.start, "Unexpected token type '{s}', expected =, : or an identifier", .{@tagName(token2.typ)});
                         return error.UnexpectedToken;
-                    } // invalid
+                    }, // invalid
                 }
 
-                if(prev_sibling) |prev| {
+                if (prev_sibling) |prev| {
                     prev.next_sibling = node;
                 }
                 prev_sibling = node;
 
                 var token4 = tokenizer.nextToken();
-                
-                switch(token4.typ) {
+
+                switch (token4.typ) {
                     // .brace_end,
-                    .eos => {
-                    },
+                    .eos => {},
                     .brace_start => {
-                        try parseTokensRecursively(MaxNodes, nodePool, tokenizer, node);
+                        try parseTokensRecursively(MaxNodes, node_pool, tokenizer, node);
                     },
                     else => {
                         utils.parseError(tokenizer.buf, token4.start, "Unexpected token type '{s}', expected ; or {{", .{@tagName(token4.typ)});
                         return error.UnexpectedToken;
-                    } // invalid
+                    }, // invalid
                 }
                 state = .start;
                 tok = token4;
             },
-            else => {
-                
-            }
+            else => {},
         }
     }
 }
 
+/// Join two dif-graphs: adds second to end of first
+/// TODO: This is in preparation for handling includes. Currently not in use.
+fn join(base_root: *DifNode, to_join: *DifNode) void {
+    var current = base_root;
+
+    // Find last sibling
+    while (true) {
+        if (current.next_sibling) |next| {
+            current = next;
+        } else {
+            break;
+        }
+    }
+
+    // join to_join as as new sibling
+    current.next_sibling = to_join;
+}
+
+test "join" {
+    var nodePool = initBoundedArray(DifNode, 1024);
+    var root_a = try bufToDif(1024, &nodePool,
+        \\node Component;
+        \\edge owns;
+    );
+    try testing.expectEqual(nodePool.slice().len, 2);
+    try testing.expectEqualStrings("owns", nodePool.slice()[1].name.?);
+
+    var root_b = try bufToDif(1024, &nodePool,
+        \\compA: Component;
+        \\compB: Component;
+        \\compA owns compB;
+    );
+
+    join(root_a, root_b);
+
+    try testing.expectEqual(nodePool.slice().len, 5);
+    try testing.expectEqualStrings("compA", nodePool.slice()[4].name.?);
+    try testing.expectEqual(DifNodeType.Relationship, nodePool.slice()[4].node_type);
+}
 
 // test/debug
 pub fn dumpDifAst(node: *DifNode, level: u8) void {

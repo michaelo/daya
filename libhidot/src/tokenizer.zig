@@ -3,22 +3,6 @@ const utils = @import("utils.zig");
 const testing = std.testing;
 const debug = std.debug.print;
 
-fn keywordOrIdentifier(value: []const u8) TokenType {
-    if (std.mem.eql(u8, value, "node")) {
-        return TokenType.keyword_node;
-    } else if (std.mem.eql(u8, value, "edge")) {
-        return TokenType.keyword_edge;
-    // } else if (std.mem.eql(u8, value, "layout")) {
-    //     return TokenType.keyword_layout;
-    } else if (std.mem.eql(u8, value, "group")) {
-        return TokenType.keyword_group;
-    } else if (std.mem.eql(u8, value, "layer")) {
-        return TokenType.keyword_layer;
-    }
-
-    return TokenType.identifier;
-}
-
 pub const TokenType = enum {
     invalid,
     eof,
@@ -27,7 +11,6 @@ pub const TokenType = enum {
     keyword_node,
     keyword_edge,
     keyword_group,
-    // keyword_layout,
     keyword_layer,
     identifier,
     single_line_comment,
@@ -35,7 +18,6 @@ pub const TokenType = enum {
     brace_end,
     colon,
     equal,
-    arrow, // Remove? Can rather support creating edges with names such as "->". Or keep is at as a kind of anonymous edge. Shall we then have <-, ->. <->, et.al.?
     numeric_literal,
     numeric_unit,
     hash_color, // TODO: solve as identifier instead? And validate at a later stage?
@@ -64,7 +46,6 @@ pub const Tokenizer = struct {
 
     buf: []const u8,
     pos: u64 = 0,
-    // state: ParseState = .start,
 
     pub fn init(buffer: []const u8) Tokenizer {
         return Tokenizer{
@@ -84,7 +65,6 @@ pub const Tokenizer = struct {
 
         while (self.pos < self.buf.len) : (self.pos += 1) {
             const c = self.buf[self.pos];
-            // debug("Processing '{c}' ({s})\n", .{c, state});
             switch (state) {
                 .start => {
                     result.start = self.pos;
@@ -104,7 +84,7 @@ pub const Tokenizer = struct {
                         },
                         '"' => {
                             state = .string;
-                            result.start = self.pos+1;
+                            result.start = self.pos + 1;
                         },
                         '{' => {
                             result.typ = .brace_start;
@@ -150,7 +130,7 @@ pub const Tokenizer = struct {
                     switch (c) {
                         '"' => {
                             // Ignore escaped "'s
-                            if(self.buf[self.pos-1] == '\\') continue;
+                            if (self.buf[self.pos - 1] == '\\') continue;
 
                             result.end = self.pos;
                             result.typ = .string;
@@ -163,14 +143,12 @@ pub const Tokenizer = struct {
                 .identifier => {
                     switch (c) {
                         // Anything that's not whitespace, special reserver character or eos is a valid identifier
-                        // 'a'...'z', 'A'...'Z', '0'...'9','_','-','<','>' => {},
                         '\n', '\t', ' ', '\r', ';', '{', '}', '(', ')', ':', '=' => {
                             result.end = self.pos;
-                            // TBD: Should we here have control if we're on lhs/rhs? Reserved leftside-keywords could be valid values
                             result.typ = keywordOrIdentifier(self.buf[result.start..result.end]);
                             break;
                         },
-                        else => {}
+                        else => {},
                     }
                 },
                 .f_slash => {
@@ -268,25 +246,25 @@ test "tokenize exploration" {
         .keyword_node,
         .identifier,
         .brace_start,
-            .identifier,
-            .equal,
-            .string,
-            .eos,
+        .identifier,
+        .equal,
+        .string,
+        .eos,
         .brace_end,
 
         // edge relates_to {...}
         .keyword_edge,
         .identifier,
         .brace_start,
-            .identifier,
-            .equal,
-            .string,
-            .eos,
+        .identifier,
+        .equal,
+        .string,
+        .eos,
 
-            .identifier,
-            .equal,
-            .identifier, // #ffffff TODO: Parse it as hash-value already here?
-            .eos,
+        .identifier,
+        .equal,
+        .identifier, // #ffffff TODO: Parse it as hash-value already here?
+        .eos,
         .brace_end,
 
         // edge owns;
@@ -317,71 +295,38 @@ test "tokenize exploration" {
         .identifier,
         .identifier,
         .brace_start,
-            .identifier,
-            .equal,
-            .string,
-            .eos,
+        .identifier,
+        .equal,
+        .string,
+        .eos,
         .brace_end,
 
-        .eof
- });
+        .eof,
+    });
 }
 
 pub fn dump(buf: []const u8) void {
     var tokenizer = Tokenizer.init(buf);
     var i: usize = 0;
-    
-    while (true) : (i+=1) {
+
+    while (true) : (i += 1) {
         var token = tokenizer.nextToken();
         var start = utils.idxToLineCol(buf[0..], token.start);
-        debug("token[{d:>2}] ({d:>2}:{d:<2}): {s:<16} -> {s}\n", .{i, start.line, start.col, @tagName(token.typ), token.slice});
-        if(token.typ == .eof) break;
+        debug("token[{d:>2}] ({d:>2}:{d:<2}): {s:<16} -> {s}\n", .{ i, start.line, start.col, @tagName(token.typ), token.slice });
+        if (token.typ == .eof) break;
     }
 }
 
-// test "tokenize exploration 2" {
-//     var buf =
-//         \\node Module {
-//         \\  label=unquoted value;
-//         \\  width=300px;
-//         \\}
-//         \\
-//         \\group Components {
-//         \\    group LibComponents {
-//         \\        LibCompA: Component;
-//         \\        LibCompB: Component;
-//         \\    };
-//         \\    
-//         \\    group ApiComponents {
-//         \\        ApiCompA: Component;
-//         \\        ApiCompB: Component;
-//         \\    };
-//         \\
-//         \\    ApiComponents uses LibComponents;
-//         \\
-//         \\    ApiCompA uses LibCompA;
-//         \\    ApiCompA uses LibCompB;
-//         \\};
-//         \\
-//     ;
-
-//     dump(buf[0..]);
-// }
-
-// Adds tokens to tokens_out and returns number of tokens found/added
-pub fn tokenize(buf: []const u8, tokens_out: []Token) !usize {
-    var tokenizer = Tokenizer.init(buf);
-    var tok_idx: usize = 0;
-
-    while (tok_idx < buf.len) {
-        const token = tokenizer.nextToken();
-        tokens_out[tok_idx] = token;
-        tok_idx += 1;
-
-        if (token.typ == .eof) break;
-    } else if (tok_idx == buf.len) {
-        return error.Overflow;
+fn keywordOrIdentifier(value: []const u8) TokenType {
+    if (std.mem.eql(u8, value, "node")) {
+        return TokenType.keyword_node;
+    } else if (std.mem.eql(u8, value, "edge")) {
+        return TokenType.keyword_edge;
+    } else if (std.mem.eql(u8, value, "group")) {
+        return TokenType.keyword_group;
+    } else if (std.mem.eql(u8, value, "layer")) {
+        return TokenType.keyword_layer;
     }
 
-    return tok_idx;
+    return TokenType.identifier;
 }

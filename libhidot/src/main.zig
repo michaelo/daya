@@ -4,10 +4,9 @@ const builtin = @import("builtin");
 const dif = @import("dif.zig");
 const dot = @import("dot.zig");
 const sema = @import("sema.zig");
-const Tokenizer = @import("tokenizer.zig").Tokenizer;
 
 const initBoundedArray = @import("utils.zig").initBoundedArray;
-const Token = @import("tokenizer.zig").Token;
+const Tokenizer = @import("tokenizer.zig").Tokenizer;
 
 pub const LIB_VERSION = blk: {
     if (builtin.mode != .Debug) {
