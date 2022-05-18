@@ -150,7 +150,13 @@ The system is split into the following components:
 
 ### Compiler
 
-...
+#### libhidot
+
+The core component of it all. Provides functionaly to parse .hidot, validate the results, output valid .dot + eventually execute system-installed dot to generate a graphical representation of the diagram.
+
+#### Compiler executable
+
+A thin executable-wrapper on top of libhidot.
 
 ### Service / backend
 
@@ -166,6 +172,14 @@ Minimal, single-page, input-form to provide hidot data and desired output-format
 ### Web component for easy inclusion into sites
 
 ...
+
+Design goals
+---------
+* Overall:
+    * ...
+* Internals:
+    * Reproducible builds - as far as possible, ie.: up until dot
+    * If the compiler hasn't complained, then dot shall succeed. ie.: if the compiler hasn't detected an error, then the intermediary dot-data shall be valid.
 
 TODO
 ---------

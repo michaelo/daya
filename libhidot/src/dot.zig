@@ -360,7 +360,7 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
                     
                     // Check for note:
                     if(groupParams.note) |note| {
-                        var note_idx = @ptrToInt(instance);
+                        var note_idx = @ptrToInt(instance); // TODO: Revise, as this doesn't provide identical reproducible builds (wrt to the dot-output)
                         try ctx.print(
                             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
                             \\note_{0x} -> {2s}[lhead=cluster_{2s},arrowtail=none,arrowhead=none,style=dashed];
