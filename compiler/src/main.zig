@@ -207,7 +207,9 @@ pub fn do(args: *AppArgs) errors!void {
     // var output_tmp_dot = std.fmt.bufPrint(scrap, "{s}", .{});
     try hidotFileToDotFile(args.input_file, TEMPORARY_FILE);
     defer {
-        std.fs.cwd().deleteFile(TEMPORARY_FILE) catch unreachable;
+        std.fs.cwd().deleteFile(TEMPORARY_FILE) catch |e| {
+            debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{TEMPORARY_FILE, e});
+        };
     }
 
     switch(args.output_format) {
@@ -268,6 +270,7 @@ fn callDot(input_file: []const u8, output_file: []const u8, output_format: Outpu
                                 .max_output_bytes = 128,
                             });
 
+    // TODO: There are situations where dot fails where this doesn't occur: 
     if(result.term.Exited != 0) {
         debug("dot returned error: {s}\n", .{result.stderr});
         debug("Generate .dot-file instead to debug generated data. This is most likely a bug in hidot.", .{});

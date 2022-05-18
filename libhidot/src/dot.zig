@@ -68,36 +68,6 @@ test "writeRelationshipFields" {
 
 const DifNodeMap = std.StringHashMap(*DifNode);
 
-// Parse the entire node-tree from <node>, populate the maps with references to nodes, edges and instantiations indexed by their .name
-fn findAllEdgesNodesAndInstances(node: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) error{OutOfMemory, NodeWithNoName}!void {
-    var node_name = node.name orelse {
-        // Found node with no name... is it even possible at this stage?
-        return error.NodeWithNoName;
-    };
-
-    switch (node.node_type) {
-        .Node => {
-            try nodeMap.put(node_name, node);
-        },
-        .Edge => {
-            try edgeMap.put(node_name, node);
-        },
-        .Instantiation => {
-            try instanceMap.put(node_name, node);
-        },
-        else => {},
-    }
-
-    if (node.first_child) |child| {
-        try findAllEdgesNodesAndInstances(child, nodeMap, edgeMap, instanceMap);
-    }
-
-    // TODO: Loop on generation, recurse only on child?
-    if (node.next_sibling) |next| {
-        try findAllEdgesNodesAndInstances(next, nodeMap, edgeMap, instanceMap);
-    }
-}
-
 const RenderError = error{
     UnexpectedType,
     NoSuchNode,
@@ -414,7 +384,7 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
                     try writer.print("subgraph cluster_{s} {{\n", .{node.name});
 
                     // Invisible point inside group, used to create edges to/from groups
-                    try writer.print("invis_group_{s} [shape=point,style=invis,height=0,width=0];", .{node.name});
+                    try writer.print("{s} [shape=point,style=invis,height=0,width=0];", .{node.name});
                     try renderGeneration(Writer, writer, child, nodeMap, edgeMap, instanceMap);
                     try writer.writeAll("}\n");
 
@@ -427,7 +397,7 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
                         var note_idx = @ptrToInt(instance);
                         try writer.print(
                             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
-                            \\note_{0x} -> invis_group_{2s}[lhead=cluster_{2s},arrowtail=none,arrowhead=none,style=dashed];
+                            \\note_{0x} -> {2s}[lhead=cluster_{2s},arrowtail=none,arrowhead=none,style=dashed];
                             \\
                         , .{note_idx, note, node.name});
                     }
@@ -456,21 +426,16 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
     }
 }
 
-pub fn difToDot(comptime Writer: type, writer: Writer, allocator: std.mem.Allocator, rootNode: *DifNode) !void {
-    // Att: Currently no scoping of node-types
-    var nodeMap = DifNodeMap.init(allocator);
-    defer nodeMap.deinit();
+/// Pre-populated sets of indexes to the different difnodes
+pub const DifNodeMapSet = struct{
+    node_map: *DifNodeMap,
+    edge_map: *DifNodeMap,
+    instance_map: *DifNodeMap,
+    group_map: *DifNodeMap,
+};
 
-    var edgeMap = DifNodeMap.init(allocator);
-    defer edgeMap.deinit();
-
-    var instanceMap = DifNodeMap.init(allocator);
-    defer instanceMap.deinit();
-
-    try findAllEdgesNodesAndInstances(rootNode, &nodeMap, &edgeMap, &instanceMap);
-
+pub fn difToDot(comptime Writer: type, writer: Writer, root_node: *DifNode, map_set: DifNodeMapSet) !void {
     try writer.writeAll("strict digraph {\ncompound=true;\n");
-    try renderGeneration(Writer, writer, rootNode, &nodeMap, &edgeMap, &instanceMap);
-
+    try renderGeneration(Writer, writer, root_node, map_set.node_map, map_set.edge_map, map_set.instance_map);
     try writer.writeAll("}\n");
 }

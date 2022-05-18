@@ -124,7 +124,6 @@ pub const DifNode = struct {
     // // Common fields
     node_type: DifNodeType,
     first_child: ?*Self = null,
-    parent: ?*Self = null,
     next_sibling: ?*Self = null,
     initial_token: ?Token = null, // Reference back to source
     name: ?[]const u8 = null,
@@ -225,25 +224,21 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                         node.* =  switch(initial_token.typ) {
                             .keyword_edge => DifNode{
                                 .node_type = .Edge,
-                                .parent = parent,
                                 .name = tok.slice,
                                 .initial_token = initial_token,
                                 .data = .{ .Edge = .{} } },
                             .keyword_node => DifNode{
                                 .node_type = .Node,
-                                .parent = parent,
                                 .name = tok.slice,
                                 .initial_token = initial_token,
                                 .data = .{ .Node = .{} } },
                             .keyword_group => DifNode{
                                 .node_type = .Group,
-                                .parent = parent,
                                 .name = tok.slice,
                                 .initial_token = initial_token,
                                 .data = .{ .Group = .{} } },
                             .keyword_layer => DifNode{
                                 .node_type = .Layer,
-                                .parent = parent,
                                 .name = tok.slice,
                                 .initial_token = initial_token,
                                 .data = .{ .Layer = .{} } },
@@ -302,7 +297,6 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                             .node_type = .Value,
                             .name = token1.slice,
                             .initial_token = token1,
-                            .parent = parent,
                             .data = .{
                                 .Value = .{
                                     // TODO: Currently assuming single-token value for simplicity. This will likely not be the case for e.g. numbers with units
@@ -317,7 +311,6 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                             .node_type = .Instantiation,
                             .name = token1.slice,
                             .initial_token = token1,
-                            .parent = parent,
                             .data = .{
                                 .Instantiation = .{
                                     .target = token3.slice,
@@ -331,7 +324,6 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, nodePool: *std.BoundedAr
                             .node_type = .Relationship,
                             .name = token1.slice, // source... Otherwise create an ID here, and keep source, edge and target all in .data? (TODO)
                             .initial_token = token1,
-                            .parent = parent,
                             .data = .{
                                 .Relationship = .{
                                     .edge = token2.slice,

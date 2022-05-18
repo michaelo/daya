@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 
 const dif = @import("dif.zig");
 const dot = @import("dot.zig");
+const sema = @import("sema.zig");
 const Tokenizer = @import("tokenizer.zig").Tokenizer;
 
 const initBoundedArray = @import("utils.zig").initBoundedArray;
@@ -26,8 +27,8 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
     const allocator = arena.allocator();
 
     var tokenizer = Tokenizer.init(buf[0..]);
-    var nodePool = initBoundedArray(dif.DifNode, 1024);
-    var rootNode = try dif.tokensToDif(1024, &nodePool, &tokenizer);
+    var node_pool = initBoundedArray(dif.DifNode, 1024);
+    var rootNode = try dif.tokensToDif(1024, &node_pool, &tokenizer);
     // TODO: check for includes, and add new units accordingly
     // 1. Create a "Unit"-node, and add results of dif.tokensToDif() to this
     // 2. Iterate over this node immediate children and find all includes.
@@ -36,8 +37,16 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
     // *-Unit -child-> <nodes from first compilation unit>
     // |-Unit2 -child-> <nodes frmo second compilation unit>
     // 
+
+    var semaCtx = try sema.doSema(allocator, rootNode, buf);
+    defer semaCtx.deinit();
     
-    try dot.difToDot(Writer, writer, allocator, rootNode);
+    try dot.difToDot(Writer, writer, rootNode, dot.DifNodeMapSet{
+        .node_map = &semaCtx.node_map,
+        .edge_map = &semaCtx.edge_map,
+        .instance_map = &semaCtx.instance_map,
+        .group_map = &semaCtx.group_map,
+    });
 }
 
 pub fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {
@@ -62,5 +71,6 @@ test "test entry" {
         _ = @import("utils.zig");
         _ = @import("bufwriter.zig");
         _ = @import("dot.zig");
+        _ = @import("sema.zig");
     }
 }
