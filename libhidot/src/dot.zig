@@ -2,6 +2,7 @@
 const std = @import("std");
 const main = @import("main.zig");
 const bufwriter = @import("bufwriter.zig");
+const utils = @import("utils.zig");
 const testing = std.testing;
 const debug = std.debug.print;
 
@@ -11,11 +12,11 @@ const DifNode = dif.DifNode;
 test "writeNodeFields" {
     // Go through each fields and verify that it gets converted as expected
     var buf: [1024]u8 = undefined;
-    var context = bufwriter.ArrayBuf {
+    var buf_context = bufwriter.ArrayBuf {
         .buf = buf[0..]
     };
 
-    var writer = context.writer();
+    var writer = buf_context.writer();
 
     var source =
         \\node MyNode {
@@ -30,10 +31,10 @@ test "writeNodeFields" {
     try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
-    try testing.expect(std.mem.indexOf(u8, context.slice(), "\"Node\"") != null);
-    try testing.expect(std.mem.indexOf(u8, context.slice(), "My label") != null);
-    try testing.expect(std.mem.indexOf(u8, context.slice(), "bgcolor=\"#FF0000\"") != null);
-    try testing.expect(std.mem.indexOf(u8, context.slice(), "color=\"#000000\"") != null);
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "\"Node\"") != null);
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "My label") != null);
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "bgcolor=\"#FF0000\"") != null);
+    try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "color=\"#000000\"") != null);
 }
 
 test "writeRelationshipFields" {
@@ -169,9 +170,59 @@ test "printPrettify" {
     // bufctx.reset();
 }
 
+
+pub fn DotContext(comptime Writer: type) type {
+    return struct {
+        const Self = @This();
+
+        src_buf: []const u8,
+        writer: Writer,
+
+        pub fn init(writer: Writer, src_buf: []const u8) Self {
+            return Self{
+                .writer = writer,
+                .src_buf = src_buf,
+            };
+        }
+
+        fn print(self: *Self, comptime fmt: []const u8, args: anytype) !void {
+            try self.writer.print(fmt, args);
+        }
+
+        fn printError(self: *Self, node: *dif.DifNode, comptime fmt: []const u8, args: anytype) void {
+            const errPrint = std.io.getStdErr().writer().print;
+            var lc = utils.idxToLineCol(self.src_buf, node.initial_token.?.start);
+            errPrint("ERROR ({d}:{d}): ", .{lc.line, lc.col}) catch {};
+            errPrint(fmt, args) catch {};
+            errPrint("\n", .{}) catch {};
+            utils.dumpSrcChunkRef(self.src_buf, node.initial_token.?.start);
+            errPrint("\n", .{}) catch {};
+
+            // Print ^ at start of symbol
+            var i: usize = 0;
+            if(lc.col > 0) while(i<lc.col-1): (i+=1) {
+                errPrint(" ", .{}) catch {};
+            };
+            errPrint("^\n", .{}) catch {};
+        }
+    };
+}
+
+test "continue here" {
+    testing.expect(false);
+}
+
+/// Pre-populated sets of indexes to the different difnodes
+pub const DifNodeMapSet = struct{
+    node_map: *DifNodeMap,
+    edge_map: *DifNodeMap,
+    instance_map: *DifNodeMap,
+    group_map: *DifNodeMap,
+};
+
 /// Extracts a set of predefined key/values, based on the particular ParamsType
-/// TODO: How to best output or return error when e.g. parsing enum from string?
-fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) !void {
+/// TODO: How to best output or return error when e.g. parsing enum from string? Pass in a DotContext with reference to source buffer, then print from inside?
+fn getFieldsFromChildSet(comptime Writer: type, ctx: *DotContext(Writer), comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) !void {
     var node = first_sibling;
     while (true) {
         // check node type: We're only looking for value-types
@@ -195,11 +246,20 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
                         if (std.mem.eql(u8, "label", param_name)) {
                             result.label = node.data.Value.value;
                         } else if (std.mem.eql(u8, "edge_style", param_name)) {
-                            result.edge_style = try dif.EdgeStyle.fromString(node.data.Value.value);
+                            result.edge_style = dif.EdgeStyle.fromString(node.data.Value.value) catch |e| {
+                                ctx.printError(node, "Invalid value for field 'edge_style': {s}\n", .{node.data.Value.value});
+                                return e;
+                            };
                         } else if (std.mem.eql(u8, "source_symbol", param_name)) {
-                            result.source_symbol = try dif.EdgeEndStyle.fromString(node.data.Value.value);
+                            result.source_symbol = dif.EdgeEndStyle.fromString(node.data.Value.value) catch |e| {
+                                ctx.printError(node, "Invalid value for field 'source_symbol': {s}\n", .{node.data.Value.value});
+                                return e;
+                            };
                         } else if (std.mem.eql(u8, "target_symbol", param_name)) {
-                            result.target_symbol = try dif.EdgeEndStyle.fromString(node.data.Value.value);
+                            result.target_symbol = dif.EdgeEndStyle.fromString(node.data.Value.value) catch |e| {
+                                ctx.printError(node, "Invalid value for field 'target_symbol': {s}\n", .{node.data.Value.value});
+                                return e;
+                            };
                         } else if (std.mem.eql(u8, "source_label", param_name)) {
                             result.source_label = node.data.Value.value;
                         } else if (std.mem.eql(u8, "target_label", param_name)) {
@@ -233,7 +293,7 @@ fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, res
     }
 }
 
-fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode, nodeMap: *DifNodeMap) anyerror!void {
+fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance: *DifNode, nodeMap: *DifNodeMap) anyerror!void {
     if (instance.node_type != .Instantiation) {
         return RenderError.UnexpectedType;
     }
@@ -244,64 +304,64 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
     var nodeName = instance.data.Instantiation.target;
 
     var node = nodeMap.get(nodeName) orelse {
-        debug("ERROR: No node {s} found\n", .{nodeName});
+        ctx.printError(instance, "No node {s} found\n", .{nodeName});
         return RenderError.NoSuchNode;
     };
 
     // TODO: Dilemma; all other fields but label are overrides - if we could solve that, then we could just let
     //       both getNodeFieldsFromChildSet-calls take the same set according to presedence (node, then instantiation)
     if (instance.first_child) |child| {
-        try getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(instanceParams), child, &instanceParams);
     }
 
     if (node.first_child) |child| {
-        try getFieldsFromChildSet(@TypeOf(nodeParams), child, &nodeParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(nodeParams), child, &nodeParams);
     }
 
     // Print node name and start attr-list
-    try writer.print("    \"{s}\"[", .{instance.name});
+    try ctx.print("    \"{s}\"[", .{instance.name});
 
     // Compose label
     {
-        try writer.print("label=\"", .{});
+        try ctx.print("label=\"", .{});
 
         // Instance-name/label
         if (instanceParams.label) |label| {
-            try writer.print("{s}", .{label});
+            try ctx.print("{s}", .{label});
         } else if (instance.name) |name| {
-            try printPrettify(Writer, writer, name, .{.do_caps = true});
+            try printPrettify(Writer, ctx.writer, name, .{.do_caps = true});
         }
 
         // Node-type-name/label
         if (nodeParams.label orelse node.name) |node_label| {
-            try writer.print("\n{s}", .{node_label});
+            try ctx.print("\n{s}", .{node_label});
         }
 
-        try writer.print("\",", .{});
+        try ctx.print("\",", .{});
     }
 
     // Shape
     if (instanceParams.shape orelse nodeParams.shape) |shape| {
-        try writer.print("shape=\"{s}\",", .{shape});
+        try ctx.print("shape=\"{s}\",", .{shape});
     }
 
     // Foreground
     if (instanceParams.fgcolor orelse nodeParams.fgcolor) |fgcolor| {
-        try writer.print("fontcolor=\"{0s}\",", .{fgcolor});
+        try ctx.print("fontcolor=\"{0s}\",", .{fgcolor});
     }
 
     // Background
     if (instanceParams.bgcolor orelse nodeParams.bgcolor) |bgcolor| {
-        try writer.print("style=filled,bgcolor=\"{0s}\",fillcolor=\"{0s}\",", .{bgcolor});
+        try ctx.print("style=filled,bgcolor=\"{0s}\",fillcolor=\"{0s}\",", .{bgcolor});
     }
 
     // end attr-list/node
-    try writer.writeAll("];\n");
+    try ctx.print("];\n", .{});
 
     // Check for note:
     if(instanceParams.note) |note| {
         // TODO: generate node name (comment_NN?)? Or does dot support anonymous "inline"-nodes?
-        try writer.print(
+        try ctx.print(
             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
             \\note_{0x} -> "{2s}"[arrowtail=none,arrowhead=none,style=dashed];
             \\
@@ -309,7 +369,7 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
     }
 }
 
-fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *DifNodeMap) anyerror!void {
+fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance: *DifNode, instanceMap: *DifNodeMap, edgeMap: *DifNodeMap) anyerror!void {
     if (instance.node_type != .Relationship) {
         return RenderError.UnexpectedType;
     }
@@ -319,16 +379,17 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     var targetNodeName = instance.data.Relationship.target;
 
     var sourceNode = instanceMap.get(sourceNodeName) orelse {
-        debug("ERROR: No instance {s} found\n", .{sourceNodeName});
+        ctx.printError(instance, "No instance {s} found\n", .{sourceNodeName});
         return error.NoSuchInstance;
     };
 
     var targetNode = instanceMap.get(targetNodeName) orelse {
-        debug("ERROR: No instance {s} found\n", .{targetNodeName});
+        ctx.printError(instance, "No instance {s} found\n", .{targetNodeName});
         return error.NoSuchInstance;
     };
 
     var edge = edgeMap.get(edgeName) orelse {
+        ctx.printError(instance, "No edge {s} found\n", .{edgeName});
         return error.NoSuchEdge;
     };
 
@@ -336,23 +397,23 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     var edgeParams: EdgeParams = .{};
 
     if (instance.first_child) |child| {
-        try getFieldsFromChildSet(@TypeOf(instanceParams), child, &instanceParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(instanceParams), child, &instanceParams);
     }
 
     if (edge.first_child) |child| {
-        try getFieldsFromChildSet(@TypeOf(edgeParams), child, &edgeParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(edgeParams), child, &edgeParams);
     }
 
-    try writer.print("\"{s}\" -> \"{s}\"[", .{ sourceNode.name, targetNode.name });
+    try ctx.print("\"{s}\" -> \"{s}\"[", .{ sourceNode.name, targetNode.name });
 
     // Label
     if (instanceParams.label orelse edgeParams.label) |label| {
-        try writer.print("label=\"{s}\",", .{label});
+        try ctx.print("label=\"{s}\",", .{label});
     } else {
         if (edge.name) |label| {
-            try writer.print("label=\"", .{});
-            try printPrettify(Writer, writer, label, .{});
-            try writer.print("\",", .{});
+            try ctx.print("label=\"", .{});
+            try printPrettify(Writer, ctx.writer, label, .{});
+            try ctx.print("\",", .{});
         }
     }
 
@@ -360,9 +421,9 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     var edge_style = instanceParams.edge_style orelse edgeParams.edge_style orelse dif.EdgeStyle.solid;
 
     // Start edge
-    try writer.print("style=\"{s}\",", .{std.meta.tagName(edge_style)});
+    try ctx.print("style=\"{s}\",", .{std.meta.tagName(edge_style)});
 
-    try writer.print("dir=both,", .{});
+    try ctx.print("dir=both,", .{});
 
     if(instanceParams.source_symbol orelse edgeParams.source_symbol) |source_symbol| {
         var arrow = switch (source_symbol) {
@@ -372,9 +433,9 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
             .none => "none",
         };
         
-        try writer.print("arrowtail={s},", .{arrow});
+        try ctx.print("arrowtail={s},", .{arrow});
     } else {
-        try writer.print("arrowtail=none,", .{});
+        try ctx.print("arrowtail=none,", .{});
     }
 
     // End edge
@@ -385,45 +446,45 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
             .arrow_filled => "normal",
             .none => "none",
         };
-        try writer.print("arrowhead={s},", .{arrow});
+        try ctx.print("arrowhead={s},", .{arrow});
     } else {
-        try writer.print("arrowhead=normal,", .{});
+        try ctx.print("arrowhead=normal,", .{});
     }
 
-    try writer.writeAll("];\n");
+    try ctx.print("];\n", .{});
 }
 
 /// Recursive
-fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) anyerror!void {
+fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *DifNode, nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap) anyerror!void {
     var node: *DifNode = instance;
 
     // Iterate over siblings
     while (true) {
         switch (node.node_type) {
             .Instantiation => {
-                try renderInstantiation(Writer, writer, node, nodeMap);
+                try renderInstantiation(Writer, ctx, node, nodeMap);
             },
             .Relationship => {
-                try renderRelationship(Writer, writer, node, instanceMap, edgeMap);
+                try renderRelationship(Writer, ctx, node, instanceMap, edgeMap);
             },
             .Group => {
                 // Recurse on groups
                 if (node.first_child) |child| {
-                    try writer.print("subgraph cluster_{s} {{\n", .{node.name});
+                    try ctx.print("subgraph cluster_{s} {{\n", .{node.name});
 
                     // Invisible point inside group, used to create edges to/from groups
-                    try writer.print("{s} [shape=point,style=invis,height=0,width=0];", .{node.name});
-                    try renderGeneration(Writer, writer, child, nodeMap, edgeMap, instanceMap);
-                    try writer.writeAll("}\n");
+                    try ctx.print("{s} [shape=point,style=invis,height=0,width=0];", .{node.name});
+                    try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap);
+                    try ctx.print("}}\n", .{});
 
                     // Checking group-fields in case of label, which shall be created outside of group
                     var groupParams: GroupParams = .{};
-                    try getFieldsFromChildSet(@TypeOf(groupParams), child, &groupParams);
+                    try getFieldsFromChildSet(Writer, ctx, @TypeOf(groupParams), child, &groupParams);
                     
                     // Check for note:
                     if(groupParams.note) |note| {
                         var note_idx = @ptrToInt(instance);
-                        try writer.print(
+                        try ctx.print(
                             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
                             \\note_{0x} -> {2s}[lhead=cluster_{2s},arrowtail=none,arrowhead=none,style=dashed];
                             \\
@@ -443,27 +504,19 @@ fn renderGeneration(comptime Writer: type, writer: Writer, instance: *DifNode, n
 
     // Group-level attributes
     var groupParams: GroupParams = .{};
-    try getFieldsFromChildSet(@TypeOf(groupParams), instance, &groupParams);
+    try getFieldsFromChildSet(Writer, ctx, @TypeOf(groupParams), instance, &groupParams);
 
     if (groupParams.label) |label| {
-        try writer.print("label=\"{s}\";labelloc=\"t\";\n", .{label});
+        try ctx.print("label=\"{s}\";labelloc=\"t\";\n", .{label});
     }
 
     if (groupParams.layout) |layout| {
-        try writer.print("layout=\"{s}\";\n", .{layout});
+        try ctx.print("layout=\"{s}\";\n", .{layout});
     }
 }
 
-/// Pre-populated sets of indexes to the different difnodes
-pub const DifNodeMapSet = struct{
-    node_map: *DifNodeMap,
-    edge_map: *DifNodeMap,
-    instance_map: *DifNodeMap,
-    group_map: *DifNodeMap,
-};
-
-pub fn difToDot(comptime Writer: type, writer: Writer, root_node: *DifNode, map_set: DifNodeMapSet) !void {
-    try writer.writeAll("strict digraph {\ncompound=true;\n");
-    try renderGeneration(Writer, writer, root_node, map_set.node_map, map_set.edge_map, map_set.instance_map);
-    try writer.writeAll("}\n");
+pub fn difToDot(comptime Writer: type, ctx: *DotContext(Writer), root_node: *DifNode, map_set: DifNodeMapSet) !void {
+    try ctx.print("strict digraph {{\ncompound=true;\n", .{});
+    try renderGeneration(Writer, ctx, root_node, map_set.node_map, map_set.edge_map, map_set.instance_map);
+    try ctx.print("}}\n", .{});
 }

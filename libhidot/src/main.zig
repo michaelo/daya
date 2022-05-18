@@ -28,7 +28,7 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
 
     var tokenizer = Tokenizer.init(buf[0..]);
     var node_pool = initBoundedArray(dif.DifNode, 1024);
-    var rootNode = try dif.tokensToDif(1024, &node_pool, &tokenizer);
+    var root_node = try dif.tokensToDif(1024, &node_pool, &tokenizer);
     // TODO: check for includes, and add new units accordingly
     // 1. Create a "Unit"-node, and add results of dif.tokensToDif() to this
     // 2. Iterate over this node immediate children and find all includes.
@@ -38,14 +38,16 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
     // |-Unit2 -child-> <nodes frmo second compilation unit>
     // 
 
-    var semaCtx = try sema.doSema(allocator, rootNode, buf);
-    defer semaCtx.deinit();
+    var sema_ctx = try sema.doSema(allocator, root_node, buf);
+    defer sema_ctx.deinit();
+
+    var dot_ctx = dot.DotContext(Writer).init(writer, buf);
     
-    try dot.difToDot(Writer, writer, rootNode, dot.DifNodeMapSet{
-        .node_map = &semaCtx.node_map,
-        .edge_map = &semaCtx.edge_map,
-        .instance_map = &semaCtx.instance_map,
-        .group_map = &semaCtx.group_map,
+    try dot.difToDot(Writer, &dot_ctx, root_node, dot.DifNodeMapSet{
+        .node_map = &sema_ctx.node_map,
+        .edge_map = &sema_ctx.edge_map,
+        .instance_map = &sema_ctx.instance_map,
+        .group_map = &sema_ctx.group_map,
     });
 }
 
