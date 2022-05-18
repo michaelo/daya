@@ -26,6 +26,11 @@ pub const ArrayBuf = struct {
                 .context = self
             };
     }
+
+    /// Empties the buffer
+    pub fn reset(self: *ArrayBuf) void {
+        self.len = 0;
+    }
 };
 
 /// If there's capacity to write the entire set of bytes to the backing array - write. Otherwise return error.BufferFull

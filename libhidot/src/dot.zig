@@ -101,10 +101,10 @@ const GroupParams = struct {
 };
 
 // Take a string and with simple heuristics try to make it more readable (replaces _ with space upon print)
-// TBD: Capitalize all follow-space-chars?
 // TODO: Support unicode properly
-// TODO: Support auto-spacing only, in case of edges. Then +autocap for nodes
-fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8) !void {
+fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8, comptime opts: struct {
+    do_caps: bool = false,
+}) !void {
     const State = enum {
         space,
         plain,
@@ -118,7 +118,7 @@ fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8) !void
                     '_', ' ' => break :blk ' ',
                     else => {
                         state = .plain;
-                        break :blk std.ascii.toUpper(c);
+                        break :blk if(opts.do_caps) std.ascii.toUpper(c) else c;
                     },
                 },
                 .plain => switch (c) {
@@ -134,15 +134,43 @@ fn printPrettify(comptime Writer: type, writer: Writer, label: []const u8) !void
     }
 }
 
-// test "printPrettify" {
-//     var stdout = std.io.getStdOut().writer();
-//     try printPrettify(@TypeOf(stdout), stdout, "label\n");
-//     try printPrettify(@TypeOf(stdout), stdout, "label_part\n");
-//     try printPrettify(@TypeOf(stdout), stdout, "Hey Der\n");
-//     try printPrettify(@TypeOf(stdout), stdout, "æøå_æøå\n"); // TODO: unicode not handled
-// }
+test "printPrettify" {
+    // Setup custom writer with buffer we can inspect
+    var buf: [128]u8 = undefined;
+    var bufctx = bufwriter.ArrayBuf {
+        .buf = buf[0..]
+    };
 
-// Extracts a set of predefined key/values, based on the particular ParamsType
+    var writer = bufctx.writer();
+
+    try printPrettify(@TypeOf(writer), writer, "label", .{});
+    try testing.expectEqualStrings("label", bufctx.slice());
+    bufctx.reset();
+
+    try printPrettify(@TypeOf(writer), writer, "label", .{.do_caps=true});
+    try testing.expectEqualStrings("Label", bufctx.slice());
+    bufctx.reset();
+
+    try printPrettify(@TypeOf(writer), writer, "label_part", .{});
+    try testing.expectEqualStrings("label part", bufctx.slice());
+    bufctx.reset();
+
+    try printPrettify(@TypeOf(writer), writer, "Hey Der", .{});
+    try testing.expectEqualStrings("Hey Der", bufctx.slice());
+    bufctx.reset();
+
+    try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{}); // TODO: unicode not handled
+    try testing.expectEqualStrings("æøå æøå", bufctx.slice());
+    bufctx.reset();
+
+    // Not working
+    // try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{.do_caps=true}); // TODO: unicode not handled
+    // try testing.expectEqualStrings("Æøå Æøå", bufctx.slice());
+    // bufctx.reset();
+}
+
+/// Extracts a set of predefined key/values, based on the particular ParamsType
+/// TODO: How to best output or return error when e.g. parsing enum from string?
 fn getFieldsFromChildSet(comptime ParamsType: type, first_sibling: *DifNode, result: *ParamsType) !void {
     var node = first_sibling;
     while (true) {
@@ -241,7 +269,7 @@ fn renderInstantiation(comptime Writer: type, writer: Writer, instance: *DifNode
         if (instanceParams.label) |label| {
             try writer.print("{s}", .{label});
         } else if (instance.name) |name| {
-            try printPrettify(Writer, writer, name);
+            try printPrettify(Writer, writer, name, .{.do_caps = true});
         }
 
         // Node-type-name/label
@@ -323,7 +351,7 @@ fn renderRelationship(comptime Writer: type, writer: Writer, instance: *DifNode,
     } else {
         if (edge.name) |label| {
             try writer.print("label=\"", .{});
-            try printPrettify(Writer, writer, label);
+            try printPrettify(Writer, writer, label, .{});
             try writer.print("\",", .{});
         }
     }
