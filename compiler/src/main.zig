@@ -61,6 +61,8 @@ pub fn printHelp(full: bool) void {
         \\      --version       Show version and exit
         \\  -v, --verbose       Verbose output
         \\
+        \\https://github.com/michaelo/hidot
+        \\
         , .{APP_NAME});
 }
 
@@ -169,9 +171,14 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(aa);
     defer std.process.argsFree(aa, args);
 
-    var parsedArgs = parseArgs(args[1..]) catch {
-        debug("Unable to continue. Exiting.\n", .{});
-        return;
+    var parsedArgs = parseArgs(args[1..]) catch |e| switch(e) {
+        error.OkExit => {
+            return;
+        },
+        else => {
+            debug("Unable to continue. Exiting.\n", .{});
+            return;
+        }
     };
 
     do(&parsedArgs) catch |e| switch(e) {
