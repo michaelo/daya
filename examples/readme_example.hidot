@@ -9,21 +9,21 @@ label="My example diagram";
 node Interface {
     label="<Interface>";
     shape=diamond;
-    fgcolor="#ffffff";
-    bgcolor="#000000";
+    fgcolor=#666666;
+    bgcolor=#ffddaa;
 }
 
 node Module {
     label="[Module]";
     shape=box;
-    fgcolor="#000000";
-    bgcolor="#ffffff";
+    fgcolor=#000000;
+    bgcolor=#ffffff;
 }
 
 // Define edge-/relationship-types
 edge implements {
     label="Implements";
-    style=dashed;
+    edge_style=dashed;
     target_symbol=arrow_open;
 }
 
@@ -35,9 +35,12 @@ edge relates_to {
 }
 
 // Declare the module-instances, optionally grouped
-IIterator: Interface;
+IIterator: Interface {
+    note="You can add notes to instances";
+};
 
 group Core {
+    note="You can add notes to groups";
     label="Core";
 
     MySomething: Module;

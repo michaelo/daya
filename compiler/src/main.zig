@@ -181,6 +181,9 @@ pub fn main() !void {
         errors.CouldNotReadOutputFile => {
             debug("Could not read output-file: {s}\n", .{parsedArgs.output_file});
         },
+        errors.ProcessError => {
+            // Compilation-error, previous output should pinpoint the issue.
+        },
         else => {
             debug("DEBUG: Unhandled error: {s}\n", .{e});
         }
@@ -249,7 +252,7 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
     defer file.close();
     
     hidot.hidotToDot(std.fs.File.Writer, file.writer(), input_buffer.slice()) catch |e| {
-        debug("ERROR: Got error from libhidot: {s}\n", .{e});
+        debug("ERROR: Got error when compiling ({s}), see messages above\n", .{e});
         return errors.ProcessError;
     };
 }

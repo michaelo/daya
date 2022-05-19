@@ -27,8 +27,8 @@ file: common_types.hidot:
     node Interface {
         label="<Interface>";
         shape=diamond;
-        fgcolor=#000000;
-        bgcolor=#ffffff;
+        fgcolor=#666666;
+        bgcolor=#ffddaa;
     }
 
     node Module {
@@ -41,7 +41,7 @@ file: common_types.hidot:
     // Define edge-/relationship-types
     edge implements {
         label="Implements";
-        style=dashed;
+        edge_style=dashed;
         target_symbol=arrow_open;
     }
 
@@ -58,9 +58,12 @@ file: mygraph.hidot
     label="My example diagram";
 
     // Declare the module-instances, optionally grouped
-    IIterator: Interface;
+    IIterator: Interface {
+        note="You can add notes to instances";
+    }
 
     group Core {
+        note="You can add notes to groups";
         label="Core";
 
         MySomething: Module;
@@ -79,6 +82,7 @@ file: mygraph.hidot
         // A relationship can override base-edge fields
         target_symbol=arrow_filled;
     }
+
 
 
 Result:
@@ -186,6 +190,7 @@ TODO
 * Integrate dot / libdot
     * including libs for png and svg?
 * Currently a lot of the defaults is handled within dot.zig - this is error-prone if we were to change graphing-backend
+* Support lifting notes to top level of generated doc? E.g. now, if added to an instance wihtin a group, the note also gets rendered within the same group
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Implement import-functionality

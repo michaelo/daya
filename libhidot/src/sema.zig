@@ -84,9 +84,9 @@ pub fn doSema(allocator: std.mem.Allocator, dif_root: *dif.DifNode, src_buf: []c
     return ctx;
 }
 
-fn any(haystack: [][]const u8, needle: []const u8) bool {
+fn any(comptime haystack: [][]const u8, needle: []const u8) bool {
     var found_any = false;
-    for(haystack) |candidate| {
+    inline for(haystack) |candidate| {
         if(std.mem.eql(u8, candidate, needle)) {
             found_any = true;
         }
@@ -101,7 +101,7 @@ test "any" {
 }
 
 fn isValidNodeField(field: []const u8) bool {
-    comptime var valid_fields = [_][]const u8{"label", "bgcolor", "fgcolor", "shape", "node"};
+    comptime var valid_fields = [_][]const u8{"label", "bgcolor", "fgcolor", "shape", "note"};
     return any(valid_fields[0..], field);
 }
 
