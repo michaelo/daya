@@ -121,8 +121,10 @@ Types of statements:
 
 * Declare a node-type:
 
+        // Using only default properties
         node NodeType;
 
+        // or override particular properties
         node OtherNodeType {
             label="Custom label";
             shape=diamond;
@@ -130,10 +132,10 @@ Types of statements:
 
 * Declare an edge-type
 
-        // will default to a simple, one-directional arrow when used in a relationship
+        // Using only default properties - a simple, one-directional arrow when used in a relationship
         edge owns;
 
-        // will render a two-way arrow when used in a relationship
+        // or override particular properties - to render e.g a two-way arrow
         edge twowaydataflow {
             source_symbol=arrow_filled;
             target_symbol=arrow_filled;
@@ -141,14 +143,20 @@ Types of statements:
 
 * Create a specific instance of a node
 
+        // Will inherit the properties of the given node type
         myinstance: NodeType;
 
-        otherinstance: OtherNodeType;
+        // And optionally override particular ones for this given instance
+        otherinstance: OtherNodeType {
+            shape=circle;
+        }
 
-* Specify a relationship between two node-instanes using an edge
+* Specify a relationship between two node-instances using an edge
 
+        // Using the default style of the particular edge
         myinstance owns otherinstance;
 
+        // Or override particular properties for the edge used in this given relationship
         otherinstance twowaydataflow myinstance {
             label="Overridden label for edge";
         }
@@ -199,8 +207,8 @@ Components / inner workings
 The system is split into the following components:
 * Compiler library (/libhidot) - the core compiler, can be linked into e.g compiler exe, web service, and possibly in the end as WASM to make the web frontend standalone.
 * Compiler executable (/compiler)
-* Web service
-* Web frontend
+* Web service (not started)
+* Web frontend (not started)
 
 ### Compiler
 
