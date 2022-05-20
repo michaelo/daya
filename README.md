@@ -144,6 +144,30 @@ For the different types there are a set of allowed parameters that can be specif
 * If no label is specified, the name is used
 * The parameters of an edge can be overridden pr relationship-entry
 
+Installation
+-----------
+See releases in repo, or Build-section below.
+
+To install a release, download the platform-appropriate archive, decompress it, and put the resident hidot-binary somewhere in your path.
+
+Build
+-----------
+
+Development is done using quite recent zig 0.10.x builds.
+
+Build and run (from /compiler):
+
+    $ zig build run -- --help
+
+or (e.g.) for installation on Unix-like systems (from /compiler):
+
+    $ zig build -Drelease-safe --prefix /usr/local
+
+Run tests for libhidot (from /libhidot):
+
+    $ zig build test
+
+
 Components / inner workings
 -----------
 
