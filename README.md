@@ -17,8 +17,33 @@ The subset of features, attributes and such is highly opiniated, and very much s
 
 (*): This is also to be read as; There are many, _many_ diagram-situations which are not intended to be solved by hidot.
 
+Getting started:
+----------------
 
-Hidot format example:
+Prerequisite: have graphviz (https://graphviz.org/download/) installed and dot available in path on your system.
+
+Create a .hidot file - e.g "gettingstarted.hidot":
+
+    // Create one or more node types
+    node User;
+    node System;
+
+    // Create one or more edge types
+    edge uses;
+
+    // Create instances based on node types
+    overlord: User;
+    deathstar: System;
+
+    // Create relationships based on instances and edge types
+    overlord uses deathstar;
+
+then run: ```hidot gettingstarted.hidot gettingstarted.png``` to create a diagram and save it as output.png for your viewing pleasures:
+
+![Result of hidot to png compilation](examples/gettingstarted.png)
+
+
+Hidot advanced format example:
 ---------------
 
 file: common_types.hidot:
@@ -203,7 +228,7 @@ Minimal, single-page, input-form to provide hidot data and desired output-format
 Design goals
 ---------
 * Overall:
-    * ...
+    * Value rapidness and sensical defaults over exact control
 * Internals:
     * Reproducible builds - as far as possible, ie.: up until dot
     * If the compiler hasn't complained, then dot shall succeed. ie.: if the compiler hasn't detected an error, then the intermediary dot-data shall be valid.
@@ -214,6 +239,7 @@ TODO
     * including libs for png and svg?
 * Currently a lot of the defaults is handled within dot.zig - this is error-prone if we were to change graphing-backend
 * Support lifting notes to top level of generated doc? E.g. now, if added to an instance wihtin a group, the note also gets rendered within the same group
+* Support multiple files as input (glob?) + a parameter to specify output-format, which will reuse the respective input-names with added extension for output
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Implement import-functionality
