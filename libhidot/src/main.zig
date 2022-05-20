@@ -19,12 +19,7 @@ pub const LIB_VERSION = blk: {
 const debug = std.debug.print;
 
 /// Full process from input-buffer of hidot-format to ouput-buffer of dot-format
-pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-
-    const allocator = arena.allocator();
-
+pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: Writer, buf: []const u8) !void {
     var tokenizer = Tokenizer.init(buf[0..]);
     var node_pool = initBoundedArray(dif.DifNode, 1024);
     var root_node = try dif.tokensToDif(1024, &node_pool, &tokenizer);
@@ -36,8 +31,10 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
     // *-Unit -child-> <nodes from first compilation unit>
     // |-Unit2 -child-> <nodes frmo second compilation unit>
     // 
+    var sema_ctx = sema.SemaContext().init(allocator, root_node, buf);
+    errdefer sema_ctx.deinit();
 
-    var sema_ctx = try sema.doSema(allocator, root_node, buf);
+    try sema.doSema(&sema_ctx);
     defer sema_ctx.deinit();
 
     var dot_ctx = dot.DotContext(Writer).init(writer, buf);
@@ -48,20 +45,6 @@ pub fn hidotToDot(comptime Writer: type, writer: Writer, buf: []const u8) !void 
         .instance_map = &sema_ctx.instance_map,
         .group_map = &sema_ctx.group_map,
     });
-}
-
-pub fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {
-    var file = try base_dir.openFile(path, .{ .read = true });
-    defer file.close();
-
-    return try file.readAll(target_buf[0..]);
-}
-
-pub fn writeFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !void {
-    var file = try base_dir.createFile(path, .{ .truncate = true });
-    defer file.close();
-
-    return try file.writeAll(target_buf[0..]);
 }
 
 

@@ -186,7 +186,7 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
     }
 
     // Print node name and start attr-list
-    try ctx.print("    \"{s}\"[", .{instance.name});
+    try ctx.print("\"{s}\"[", .{instance.name});
 
     // Compose label
     {
@@ -418,7 +418,7 @@ test "writeNodeFields" {
         \\
         ;
 
-    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
+    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source);
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
     try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "\"Node\"") != null);
@@ -449,7 +449,7 @@ test "writeRelationshipFields" {
         \\
         ;
 
-    try main.hidotToDot(bufwriter.ArrayBufWriter, writer, source);
+    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source);
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
     try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);

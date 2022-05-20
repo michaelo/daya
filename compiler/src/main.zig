@@ -16,7 +16,8 @@ pub const APP_VERSION = blk: {
 const errors = error {
     ParseError,
     CouldNotReadInputFile,
-    CouldNotReadOutputFile,
+    CouldNotWriteOutputFile,
+    TooLargeInputFile,
     ProcessError
 };
 
@@ -181,11 +182,11 @@ pub fn main() !void {
         }
     };
 
-    do(&parsedArgs) catch |e| switch(e) {
+    do(aa, &parsedArgs) catch |e| switch(e) {
         errors.CouldNotReadInputFile => {
-            debug("Could not read input-file: {s}\n", .{parsedArgs.input_file});
+            debug("Could not read input-file: {s}\nVerify that the path is correct and that the file is readable.\n", .{parsedArgs.input_file});
         },
-        errors.CouldNotReadOutputFile => {
+        errors.CouldNotWriteOutputFile => {
             debug("Could not read output-file: {s}\n", .{parsedArgs.output_file});
         },
         errors.ProcessError => {
@@ -208,14 +209,14 @@ pub fn main() !void {
     //
 }
 
-pub fn do(args: *AppArgs) errors!void {
+pub fn do(allocator: std.mem.Allocator, args: *AppArgs) errors!void {
     const TEMPORARY_FILE = "__hidot_tmp.dot";
     // v0.1.0:
     // Generate a .dot anyway: tmp.dot
     //   Att! This makes it not possible to run in parallal for now
     // var scrap: [1024]u8 = undefined;
     // var output_tmp_dot = std.fmt.bufPrint(scrap, "{s}", .{});
-    try hidotFileToDotFile(args.input_file, TEMPORARY_FILE);
+    try hidotFileToDotFile(allocator, args.input_file, TEMPORARY_FILE);
     defer {
         std.fs.cwd().deleteFile(TEMPORARY_FILE) catch |e| {
             debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{TEMPORARY_FILE, e});
@@ -231,7 +232,7 @@ pub fn do(args: *AppArgs) errors!void {
         },
         .png, .svg => {
             // Call external dot to convert
-            callDot(TEMPORARY_FILE, args.output_file, args.output_format) catch |e| {
+            callDot(allocator, TEMPORARY_FILE, args.output_file, args.output_format) catch |e| {
                 debug("ERROR: dot failed - {s}\n", .{e});
                 return errors.ProcessError;
             };
@@ -240,25 +241,23 @@ pub fn do(args: *AppArgs) errors!void {
 }
 
 
-pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const u8) errors!void {
-    // Allocate sufficiently big input and output buffers (1MB to begin with)
-    // TODO: Allocate larger buffer on heap?
-    var input_buffer = std.BoundedArray(u8, 1024 * 1024).init(0) catch unreachable;
-    
-    // Open path_hidot_input and read to input-buffer
-    input_buffer.resize(
-        readFile(std.fs.cwd(), path_hidot_input, input_buffer.unusedCapacitySlice()) catch { return errors.CouldNotReadInputFile; }
-    ) catch {
-        // Because readFile will fail because of unsufficient storage in unusedCapacitySlice() before .resize() fails.
-        unreachable;
+pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []const u8, path_dot_output: []const u8) errors!void {
+    var input_buffer = std.fs.cwd().readFileAlloc(allocator, path_hidot_input, 10*1024*1024) catch |e| switch(e) {
+        error.FileTooBig => return errors.TooLargeInputFile,
+        error.FileNotFound, error.AccessDenied => return errors.CouldNotReadInputFile,
+        else => {
+            debug("ERROR: Got error '{s}' while reading input file '{s}'\n", .{e, path_hidot_input});
+            return errors.ProcessError;
+        },
     };
+    defer allocator.free(input_buffer);
 
     var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch {
         return errors.ProcessError;
     };
     defer file.close();
     
-    hidot.hidotToDot(std.fs.File.Writer, file.writer(), input_buffer.slice()) catch |e| {
+    hidot.hidotToDot(allocator, std.fs.File.Writer, file.writer(), input_buffer[0..]) catch |e| {
         debug("ERROR: Got error when compiling ({s}), see messages above\n", .{e});
         return errors.ProcessError;
     };
@@ -266,8 +265,7 @@ pub fn hidotFileToDotFile(path_hidot_input: []const u8, path_dot_output: []const
 
 
 // Launches a child process to call dot, assumes it's available in path
-fn callDot(input_file: []const u8, output_file: []const u8, output_format: OutputFormat) !void {
-    var allocator = std.testing.allocator;
+fn callDot(allocator: std.mem.Allocator, input_file: []const u8, output_file: []const u8, output_format: OutputFormat) !void {
     var output_file_arg_buf: [1024]u8 = undefined;
     var output_file_arg = try std.fmt.bufPrint(output_file_arg_buf[0..], "-o{s}", .{output_file});
 
@@ -281,7 +279,7 @@ fn callDot(input_file: []const u8, output_file: []const u8, output_format: Outpu
                                 .max_output_bytes = 128,
                             });
 
-    var got_error = switch(result.term) {
+    var got_error: bool = switch(result.term) {
         .Stopped => |code| code > 0,
         .Exited => |code| code > 0,
         .Signal => true,
@@ -298,20 +296,4 @@ fn callDot(input_file: []const u8, output_file: []const u8, output_format: Outpu
         allocator.free(result.stderr);
         allocator.free(result.stdout);
     }
-}
-
-
-fn readFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !usize {
-    var file = try base_dir.openFile(path, .{ });
-    defer file.close();
-
-    return try file.readAll(target_buf[0..]);
-}
-
-
-fn writeFile(base_dir: std.fs.Dir, path: []const u8, target_buf: []u8) !void {
-    var file = try base_dir.createFile(path, .{ .truncate = true });
-    defer file.close();
-
-    return try file.writeAll(target_buf[0..]);
 }

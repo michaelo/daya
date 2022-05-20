@@ -9,8 +9,7 @@ const SemaError = error {
     NodeWithNoName, Duplicate, OutOfMemory, InvalidField
 };
 
-/// TODO: Raise out of sema to be a generic document context?
-fn SemaContext() type {
+pub fn SemaContext() type {
     return struct {
         const Self = @This();
 
@@ -24,7 +23,7 @@ fn SemaContext() type {
 
         src_buf: []const u8,
 
-        fn init(allocator: std.mem.Allocator, dif_root: *dif.DifNode, src_buf: []const u8) Self {
+        pub fn init(allocator: std.mem.Allocator, dif_root: *dif.DifNode, src_buf: []const u8) Self {
             return Self{
                 .allocator = allocator,
                 .dif_root = dif_root,
@@ -76,14 +75,11 @@ fn SemaContext() type {
 /// the desired output format (e.g. dot). 
 /// 
 /// Returned SemaContext must be .deinit()'ed
-pub fn doSema(allocator: std.mem.Allocator, dif_root: *dif.DifNode, src_buf: []const u8) SemaError!SemaContext() {
-    var ctx = SemaContext().init(allocator, dif_root, src_buf);
-    errdefer ctx.deinit();
-    // std.debug.assert(nodePool.len > 0);
-    try processNoDupesRecursively(&ctx, dif_root);
-    return ctx;
+pub fn doSema(ctx: *SemaContext()) SemaError!void {
+    try processNoDupesRecursively(ctx, ctx.dif_root);
 }
 
+/// Checks for string-needle in a string-haystack. TBD: Can generalize.
 fn any(comptime haystack: [][]const u8, needle: []const u8) bool {
     var found_any = false;
     inline for(haystack) |candidate| {
@@ -151,7 +147,7 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
         switch (current.node_type) {
             .Node => {
                 if(ctx.node_map.get(node_name)) |_| {
-                    ctx.printError(current, "Duplicate node definition, {s} already defined.", .{node_name});
+                    ctx.printError(current, "Duplicate node definition, '{s}' already defined.", .{node_name});
                     return error.Duplicate;
                 }
 
@@ -163,7 +159,7 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
             },
             .Edge => {
                 if(ctx.edge_map.get(node_name)) |_| {
-                    ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(current, "Duplicate edge definition, '{s}' already defined.", .{node_name});
                     return error.Duplicate;
                 }
 
@@ -175,10 +171,10 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
             },
             .Instantiation => {
                 if(ctx.instance_map.get(node_name)) |_| {
-                    ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(current, "Duplicate edge definition, '{s}' already defined.", .{node_name});
                     return error.Duplicate;
                 } else if(ctx.group_map.get(node_name)) |_| {
-                    ctx.printError(current, "A group with name {s} already defined, can't create instance with same name.", .{node_name});
+                    ctx.printError(current, "A group with name '{s}' already defined, can't create instance with same name.", .{node_name});
                     return error.Duplicate;
                 }
 
@@ -230,7 +226,10 @@ fn testSema(buf: []const u8) !void {
     var nodePool = utils.initBoundedArray(dif.DifNode, 1024);
     var rootNode = try dif.tokensToDif(1024, &nodePool, &tok);
 
-    var ctx = try doSema(testing.allocator, rootNode, buf);
+    var ctx = SemaContext().init(std.testing.allocator, rootNode, buf);
+    errdefer ctx.deinit();
+
+    try doSema(&ctx);
     defer ctx.deinit();
 }
 
