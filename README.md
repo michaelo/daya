@@ -7,15 +7,15 @@ Example usage of compiler:
     hidot myfile.hidot output.png
     hidot myfile.hidot output.svg
 
-hidot is a tool and library to convert from the hidot format to regular .dot, .png og .svg.
+hidot is a tool and library to convert from the .hidot format to regular .dot, .png or .svg.
 
-The hidot-format is intended to allow for rapid graphing from text sources. Mostly relationship-like diagrams such as (UML's= activity-, component-diagrams etc. There are currently no plan to add features for sequence-diagrams and such.
+The hidot-format is intended to allow for rapid diagramming from text sources. Mostly relationship-like diagrams such as (UML's= activity-, component-diagrams etc. There are currently no plan to add features for sequence-diagrams and such.
 
 It can be thought of as "a subset of dot with custom types" (*).
 
-The subset of attributes and such is highly opiniated, and very much subject to change.
+The subset of features, attributes and such is highly opiniated, and very much subject to change.
 
-(*): This is also to be read as; There are many, many diagram-situations which are not intended to be solved by hidot.
+(*): This is also to be read as; There are many, _many_ diagram-situations which are not intended to be solved by hidot.
 
 
 Hidot format example:
@@ -54,7 +54,8 @@ file: common_types.hidot:
 
 file: mygraph.hidot
 
-    @common_node_types.hidot // imports the file as described above. Limitation: path can't contain newline
+    // imports the file as described above. Limitation: path can't contain newline
+    @common_types.hidot
     label="My example diagram";
 
     // Declare the module-instances, optionally grouped
@@ -123,15 +124,15 @@ Types of statements:
 
         myinstance owns otherinstance;
 
-        otherinstance twowaydataflow {
+        otherinstance twowaydataflow myinstance {
             label="Overridden label for edge";
         }
 
 For the different types there are a set of allowed parameters that can be specificed:
 
 * For node or instance:
-    * label: string
-    * bgcolor: string/quoted #rrggbb, forwarded directly to dot.
+    * label: string - supports in-file newlines or \n
+    * bgcolor: string/#rrggbb, forwarded directly to dot.
     * fgcolor: see bgcolor.
     * shape: string, forwarded directly to dot: https://graphviz.org/doc/info/shapes.html
 * for edge or relationship:
@@ -140,10 +141,10 @@ For the different types there are a set of allowed parameters that can be specif
     * target_symbol: see source_symbol. default: arrow_open
     * edge_style: solid|dotted|dashed|bold. default: solid
 * An instance automatically inherits the parameters of their node-type. The labels are concatinated with a newline, the remaining fields are overridden.
-* If no lable is specified, the name is used
-* The parameters of an edge can be overridden pr releationship-entry
+* If no label is specified, the name is used
+* The parameters of an edge can be overridden pr relationship-entry
 
-Components
+Components / inner workings
 -----------
 
 The system is split into the following components:
@@ -154,13 +155,11 @@ The system is split into the following components:
 
 ### Compiler
 
+The main logic of the hidot-compiler is organized as a library located under /libhidot. Then there's a simple executable-wrapper located under /compiler.
+
 #### libhidot
 
-The core component of it all. Provides functionaly to parse .hidot, validate the results, output valid .dot + eventually execute system-installed dot to generate a graphical representation of the diagram.
-
-#### Compiler executable
-
-A thin executable-wrapper on top of libhidot.
+The core component of it all. Provides functionaly to parse .hidot, validate the results, output valid .dot + eventually directly execute system-installed dot to generate a graphical representation of the diagram.
 
 ### Service / backend
 
