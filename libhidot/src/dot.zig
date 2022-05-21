@@ -55,14 +55,25 @@ pub fn DotContext(comptime Writer: type) type {
     return struct {
         const Self = @This();
 
-        src_buf: []const u8,
         writer: Writer,
 
-        pub fn init(writer: Writer, src_buf: []const u8) Self {
+        pub fn init(writer: Writer) Self {
             return Self{
                 .writer = writer,
-                .src_buf = src_buf,
             };
+        }
+
+        fn findUnit(node: *dif.DifNode) !*dif.DifNode {
+            var current = node;
+            while(current.node_type != .Unit) {
+                if(current.parent) |parent| {
+                    current = parent;
+                } else {
+                    // Ending up here is a bug
+                    return error.NoUnitFound;
+                }
+            }
+            return current;
         }
 
         fn print(self: *Self, comptime fmt: []const u8, args: anytype) !void {
@@ -70,12 +81,18 @@ pub fn DotContext(comptime Writer: type) type {
         }
 
         fn printError(self: *Self, node: *dif.DifNode, comptime fmt: []const u8, args: anytype) void {
+            _ = self;
             const errPrint = std.io.getStdErr().writer().print;
-            var lc = utils.idxToLineCol(self.src_buf, node.initial_token.?.start);
-            errPrint("ERROR ({d}:{d}): ", .{lc.line, lc.col}) catch {};
+            var unit = findUnit(node) catch {
+                errPrint("BUG: Could not find unit associated with node\n", .{}) catch {};
+                unreachable;
+            };
+            var src_buf = unit.data.Unit.src_buf;
+            var lc = utils.idxToLineCol(src_buf, node.initial_token.?.start);
+            errPrint("ERROR {s} ({d}:{d}): ", .{unit.name.?, lc.line, lc.col}) catch {};
             errPrint(fmt, args) catch {};
             errPrint("\n", .{}) catch {};
-            utils.dumpSrcChunkRef(self.src_buf, node.initial_token.?.start);
+            utils.dumpSrcChunkRef(src_buf, node.initial_token.?.start);
             errPrint("\n", .{}) catch {};
 
             // Print ^ at start of symbol
@@ -338,6 +355,12 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
     // Iterate over siblings
     while (true) {
         switch (node.node_type) {
+            .Unit =>  {
+                // TODO: propagate the unit for use in e.g. error messages?
+                if (node.first_child) |child| {
+                    try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap, groupMap);
+                }
+            },
             .Instantiation => {
                 try renderInstantiation(Writer, ctx, node, nodeMap);
             },
@@ -418,7 +441,7 @@ test "writeNodeFields" {
         \\
         ;
 
-    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source);
+    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
     try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "\"Node\"") != null);
@@ -449,7 +472,7 @@ test "writeRelationshipFields" {
         \\
         ;
 
-    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source);
+    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
     try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);

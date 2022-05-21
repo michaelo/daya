@@ -22,9 +22,7 @@ pub fn SemaContext() type {
         instance_map: DifNodeMap,
         group_map: DifNodeMap,
 
-        src_buf: []const u8,
-
-        pub fn init(allocator: std.mem.Allocator, dif_root: *dif.DifNode, src_buf: []const u8) Self {
+        pub fn init(allocator: std.mem.Allocator, dif_root: *dif.DifNode) Self {
             return Self{
                 .allocator = allocator,
                 .dif_root = dif_root,
@@ -32,17 +30,35 @@ pub fn SemaContext() type {
                 .edge_map = DifNodeMap.init(allocator),
                 .instance_map = DifNodeMap.init(allocator),
                 .group_map = DifNodeMap.init(allocator),
-                .src_buf = src_buf,
             };
         }
 
+        fn findUnit(node: *dif.DifNode) !*dif.DifNode {
+            var current = node;
+            while(current.node_type != .Unit) {
+                if(current.parent) |parent| {
+                    current = parent;
+                } else {
+                    // Ending up here is a bug
+                    return error.NoUnitFound;
+                }
+            }
+            return current;
+        }
+
         fn printError(self: *Self, node: *dif.DifNode, comptime fmt: []const u8, args: anytype) void {
+            _ = self;
             const errPrint = std.io.getStdErr().writer().print;
-            var lc = utils.idxToLineCol(self.src_buf, node.initial_token.?.start);
-            errPrint("ERROR ({d}:{d}): ", .{lc.line, lc.col}) catch {};
+            var unit = findUnit(node) catch {
+                errPrint("BUG: Could not find unit associated with node\n", .{}) catch {};
+                unreachable;
+            };
+            var src_buf = unit.data.Unit.src_buf;
+            var lc = utils.idxToLineCol(src_buf, node.initial_token.?.start);
+            errPrint("ERROR {s} ({d}:{d}): ", .{unit.name.?, lc.line, lc.col}) catch {};
             errPrint(fmt, args) catch {};
             errPrint("\n", .{}) catch {};
-            utils.dumpSrcChunkRef(self.src_buf, node.initial_token.?.start);
+            utils.dumpSrcChunkRef(src_buf, node.initial_token.?.start);
             errPrint("\n", .{}) catch {};
 
             // Print ^ at start of symbol
@@ -156,6 +172,7 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
             .Instantiation => {
                 if(ctx.instance_map.get(node_name)) |_| {
                     ctx.printError(current, "Duplicate edge definition, '{s}' already defined.", .{node_name});
+                    // TODO: For all of these; add another printError: Previous defintions here: <ref to original node>
                     return error.Duplicate;
                 } else if(ctx.group_map.get(node_name)) |_| {
                     ctx.printError(current, "A group with name '{s}' already defined, can't create instance with same name.", .{node_name});
@@ -207,10 +224,10 @@ fn testSema(buf: []const u8) !void {
     const tokenizer = @import("tokenizer.zig");
 
     var tok = tokenizer.Tokenizer.init(buf);
-    var nodePool = utils.initBoundedArray(dif.DifNode, 1024);
-    var rootNode = try dif.tokensToDif(1024, &nodePool, &tok);
+    var node_pool = utils.initBoundedArray(dif.DifNode, 1024);
+    var root_node = try dif.tokensToDif(1024, &node_pool, &tok, "test");
 
-    var ctx = SemaContext().init(std.testing.allocator, rootNode, buf);
+    var ctx = SemaContext().init(std.testing.allocator, root_node);
     errdefer ctx.deinit();
 
     try doSema(&ctx);

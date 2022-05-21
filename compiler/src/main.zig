@@ -257,7 +257,7 @@ pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []cons
     };
     defer file.close();
     
-    hidot.hidotToDot(allocator, std.fs.File.Writer, file.writer(), input_buffer[0..]) catch |e| {
+    hidot.hidotToDot(allocator, std.fs.File.Writer, file.writer(), input_buffer[0..], path_hidot_input) catch |e| {
         debug("ERROR: Got error when compiling ({s}), see messages above\n", .{e});
         return errors.ProcessError;
     };
