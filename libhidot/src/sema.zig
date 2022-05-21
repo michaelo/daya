@@ -2,6 +2,7 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const dif = @import("dif.zig");
 const testing = std.testing;
+const any = utils.any;
 
 const DifNodeMap = std.StringHashMap(*dif.DifNode);
 
@@ -77,23 +78,6 @@ pub fn SemaContext() type {
 /// Returned SemaContext must be .deinit()'ed
 pub fn doSema(ctx: *SemaContext()) SemaError!void {
     try processNoDupesRecursively(ctx, ctx.dif_root);
-}
-
-/// Checks for string-needle in a string-haystack. TBD: Can generalize.
-fn any(comptime haystack: [][]const u8, needle: []const u8) bool {
-    var found_any = false;
-    inline for(haystack) |candidate| {
-        if(std.mem.eql(u8, candidate, needle)) {
-            found_any = true;
-        }
-    }
-    return found_any;
-}
-
-test "any" {
-    comptime var haystack = [_][]const u8{"label"};
-    try testing.expect(any(haystack[0..], "label"));
-    try testing.expect(!any(haystack[0..], "lable"));
 }
 
 fn isValidNodeField(field: []const u8) bool {
@@ -189,7 +173,7 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
                     ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
                     return error.Duplicate;
                 } else if(ctx.instance_map.get(node_name)) |_| {
-                    ctx.printError(current, "An instance with name {s} already defined, can't create group with same name.", .{node_name});
+                    ctx.printError(current, "An instance with name '{s}' already defined, can't create group with same name.", .{node_name});
                     return error.Duplicate;
                 }
                 // TODO: Verify valid group fields

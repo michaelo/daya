@@ -2,6 +2,7 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const testing = std.testing;
 const debug = std.debug.print;
+const any = utils.any;
 
 pub const TokenType = enum {
     invalid,
@@ -184,6 +185,30 @@ pub const Tokenizer = struct {
     }
 };
 
+const keyword_map = .{
+    .{"node", TokenType.keyword_node},
+    .{"edge", TokenType.keyword_edge},
+    .{"group", TokenType.keyword_group},
+    .{"layer", TokenType.keyword_layer},
+};
+
+/// Evaluates a string against a known set of supported keywords
+fn keywordOrIdentifier(value: []const u8) TokenType {
+    inline for(keyword_map) |kv| {
+        if (std.mem.eql(u8, value, kv[0])) {
+            return kv[1];
+        }
+    }
+
+    return TokenType.identifier;
+}
+
+test "keywordOrIdentifier" {
+    try testing.expectEqual(TokenType.keyword_edge, keywordOrIdentifier("edge"));
+    try testing.expectEqual(TokenType.identifier, keywordOrIdentifier("edgeish"));
+}
+
+/// For tests
 fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
     var tokenizer = Tokenizer.init(buf);
 
@@ -322,18 +347,4 @@ pub fn dump(buf: []const u8) void {
         debug("token[{d:>2}] ({d:>2}:{d:<2}): {s:<16} -> {s}\n", .{ i, start.line, start.col, @tagName(token.typ), token.slice });
         if (token.typ == .eof) break;
     }
-}
-
-fn keywordOrIdentifier(value: []const u8) TokenType {
-    if (std.mem.eql(u8, value, "node")) {
-        return TokenType.keyword_node;
-    } else if (std.mem.eql(u8, value, "edge")) {
-        return TokenType.keyword_edge;
-    } else if (std.mem.eql(u8, value, "group")) {
-        return TokenType.keyword_group;
-    } else if (std.mem.eql(u8, value, "layer")) {
-        return TokenType.keyword_layer;
-    }
-
-    return TokenType.identifier;
 }

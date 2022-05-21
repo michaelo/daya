@@ -191,3 +191,20 @@ test "Color.fromHexstring" {
     try testing.expectApproxEqAbs(@as(f16, 0.6), c2.b, 0.01);
     try testing.expectApproxEqAbs(@as(f16, 1.0), c2.a, 0.01);
 }
+
+/// Checks for string-needle in a string-haystack. TBD: Can generalize.
+pub fn any(comptime haystack: [][]const u8, needle: []const u8) bool {
+    var found_any = false;
+    inline for(haystack) |candidate| {
+        if(std.mem.eql(u8, candidate, needle)) {
+            found_any = true;
+        }
+    }
+    return found_any;
+}
+
+test "any" {
+    comptime var haystack = [_][]const u8{"label"};
+    try testing.expect(any(haystack[0..], "label"));
+    try testing.expect(!any(haystack[0..], "lable"));
+}

@@ -1,4 +1,8 @@
 /// Module responsible for parsing tokens to the Diagrammer Internal Format
+/// General strategy
+/// For text: We start with simply storing slices of the input-data in the Dif
+/// If we later find we need to preprocess something, we'll reconsider and add dedicated storage
+
 const std = @import("std");
 const utils = @import("utils.zig");
 const Token = @import("tokenizer.zig").Token;
@@ -19,8 +23,7 @@ const DifNodeType = enum {
     Layer,
     Instantiation,
     Relationship,
-    Parameter, // key=value
-    Value,
+    Value, // key=value
     Include,
 };
 
@@ -47,7 +50,6 @@ pub const DifNode = struct {
             edge: []const u8,
             target: []const u8,
         },
-        Parameter: struct {},
         Value: struct {
             value: []const u8,
         },
@@ -55,9 +57,6 @@ pub const DifNode = struct {
     },
 };
 
-// General strategy
-// For text: We start with simply storing slices of the input-data in the Dif
-// If we later find we need to preprocess something, we'll reconsider and add dedicated storage
 pub const NodeShape = enum {
     box,
     circle,
