@@ -21,6 +21,7 @@ const DifNodeType = enum {
     Relationship,
     Parameter, // key=value
     Value,
+    Include,
 };
 
 pub const DifNode = struct {
@@ -50,6 +51,7 @@ pub const DifNode = struct {
         Value: struct {
             value: []const u8,
         },
+        Include: struct {}
     },
 };
 
@@ -194,6 +196,24 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                         }
                         state = .start;
                     },
+                    .include => {
+                        var node = node_pool.addOneAssumeCapacity();
+
+                        if (parent) |realparent| {
+                            if (realparent.first_child == null) {
+                                realparent.first_child = node;
+                            }
+                        }
+
+                        node.* = DifNode{
+                            .node_type = .Include,
+                            .name = tok.slice[1..],
+                            .initial_token = tok,
+                            .data = .{
+                                .Include = .{},
+                            },
+                        };
+                    },
                     else => {
                         utils.parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}'", .{@tagName(tok.typ)});
                         return error.UnexpectedToken;
@@ -327,6 +347,16 @@ test "join" {
     try testing.expectEqual(nodePool.slice().len, 5);
     try testing.expectEqualStrings("compA", nodePool.slice()[4].name.?);
     try testing.expectEqual(DifNodeType.Relationship, nodePool.slice()[4].node_type);
+}
+
+test "dif parses include statement" {
+    var nodePool = initBoundedArray(DifNode, 1024);
+    var root_a = try bufToDif(1024, &nodePool,
+        \\@myfile.hidot
+    );
+
+    try testing.expectEqual(DifNodeType.Include, root_a.node_type);
+    try testing.expectEqualStrings("myfile.hidot", root_a.name.?);
 }
 
 // test/debug

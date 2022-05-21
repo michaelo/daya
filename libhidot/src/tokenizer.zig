@@ -22,6 +22,7 @@ pub const TokenType = enum {
     numeric_unit,
     hash_color, // TODO: solve as identifier instead? And validate at a later stage?
     string,
+    include,
 };
 
 pub const Token = struct {
@@ -35,6 +36,7 @@ pub const Tokenizer = struct {
     const State = enum {
         start,
         string,
+        include,
         identifier,
         single_line_comment,
         dash,
@@ -120,6 +122,10 @@ pub const Tokenizer = struct {
                         ' ', '\t', '\n' => {
                             result.start = self.pos + 1;
                         },
+                        '@' => {
+                            state = .include;
+                            result.typ = .include;
+                        },
                         else => {
                             // Error
                             utils.parseError(self.buf, self.pos, "Unexpected character '{}'", .{c});
@@ -194,6 +200,17 @@ pub const Tokenizer = struct {
                         },
                     }
                 },
+                .include => {
+                    // Spin until end of line / buffer
+                    switch (c) {
+                        '\n' => {
+                            result.end = self.pos;
+                            self.pos += 1;
+                            break;
+                        },
+                        else => {}
+                    }
+                }
             }
         } else {
             // end of "file"
@@ -215,6 +232,11 @@ fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
             return e;
         };
     }
+}
+
+test "tokenizer tokenizes import-statements" {
+    var buf = "@somefile.hidot";
+    try expectTokens(buf, &[_]TokenType{.include});
 }
 
 test "tokenize exploration" {
