@@ -18,9 +18,6 @@ pub const TokenType = enum {
     brace_end,
     colon,
     equal,
-    numeric_literal,
-    numeric_unit,
-    hash_color, // TODO: solve as identifier instead? And validate at a later stage?
     string,
     include,
 };
@@ -37,12 +34,8 @@ pub const Tokenizer = struct {
         start,
         string,
         include,
-        identifier,
+        identifier_or_keyword,
         single_line_comment,
-        dash,
-        numeric_literal,
-        numeric_unit,
-        hash,
         f_slash,
     };
 
@@ -73,16 +66,6 @@ pub const Tokenizer = struct {
                     switch (c) {
                         '/' => {
                             state = .f_slash;
-                        },
-                        '#' => {
-                            // state = .hash; // Currently no need to do anything but passthrough the color
-                            state = .identifier;
-                        },
-                        'a'...'z', 'A'...'Z', '-', '<', '>' => {
-                            state = .identifier;
-                        },
-                        '0'...'9' => {
-                            state = .numeric_literal;
                         },
                         '"' => {
                             state = .string;
@@ -118,7 +101,7 @@ pub const Tokenizer = struct {
                             result.end = self.pos;
                             break;
                         },
-                        // Whitespace are separators
+                        // Whitespace of any kind are separators
                         ' ', '\t', '\n' => {
                             result.start = self.pos + 1;
                         },
@@ -127,8 +110,9 @@ pub const Tokenizer = struct {
                             result.typ = .include;
                         },
                         else => {
-                            // Error
-                            utils.parseError(self.buf, self.pos, "Unexpected character '{}'", .{c});
+                            // Any character not specifically intended for something else is a valid identifier-character
+                            result.typ = .identifier; // will be overridden if it turns out to be a keyword
+                            state = .identifier_or_keyword;
                         },
                     }
                 },
@@ -146,7 +130,7 @@ pub const Tokenizer = struct {
                         else => {},
                     }
                 },
-                .identifier => {
+                .identifier_or_keyword => {
                     switch (c) {
                         // Anything that's not whitespace, special reserver character or eos is a valid identifier
                         '\n', '\t', ' ', '\r', ';', '{', '}', '(', ')', ':', '=' => {
@@ -161,7 +145,7 @@ pub const Tokenizer = struct {
                     switch (c) {
                         '/' => state = .single_line_comment,
                         else => {
-                            // Currently unknown token
+                            // Currently unknown token TODO: Error?
                             break;
                         },
                     }
@@ -173,31 +157,6 @@ pub const Tokenizer = struct {
                             state = .start;
                         },
                         else => {},
-                    }
-                },
-                .dash => {},
-                .numeric_literal => {
-                    switch (c) {
-                        '0'...'9' => {},
-                        // 'a'...'z' => state = .numeric_unit,
-                        else => {
-                            result.typ = .numeric_literal;
-                            result.end = self.pos;
-                            break;
-                        },
-                    }
-                },
-                .numeric_unit => {
-                    // TODO: Await.
-                },
-                .hash => {
-                    switch (c) {
-                        '0'...'9', 'a'...'f', 'A'...'F' => {},
-                        else => {
-                            result.typ = .hash_color;
-                            result.end = self.pos;
-                            break;
-                        },
                     }
                 },
                 .include => {
@@ -215,6 +174,10 @@ pub const Tokenizer = struct {
         } else {
             // end of "file"
             result.end = self.pos;
+
+            if(state == .identifier_or_keyword) {
+                result.typ = keywordOrIdentifier(self.buf[result.start..result.end]);
+            }
         }
         result.slice = self.buf[result.start..result.end];
         return result;
@@ -232,6 +195,28 @@ fn expectTokens(buf: []const u8, expected_tokens: []const TokenType) !void {
             return e;
         };
     }
+}
+
+test "tokenizer tokenizes empty string" {
+    try expectTokens("", &[_]TokenType{.eof});
+}
+
+test "tokenizer tokenizes string-tokens" {
+    try expectTokens(
+        \\"string here"
+        , &[_]TokenType{.string, .eof});
+}
+
+test "tokenizer tokenizes identifier" {
+    try expectTokens(
+        \\unquoted_word_without_white-space
+        , &[_]TokenType{.identifier, .eof});
+}
+
+test "tokenizer tokenizes keyword" {
+    try expectTokens(
+        \\node edge group layer
+        , &[_]TokenType{.keyword_node, .keyword_edge, .keyword_group, .keyword_layer, .eof});
 }
 
 test "tokenizer tokenizes import-statements" {
