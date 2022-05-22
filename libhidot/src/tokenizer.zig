@@ -295,7 +295,7 @@ test "tokenize exploration" {
 
         .identifier,
         .equal,
-        .identifier, // #ffffff TODO: Parse it as hash-value already here?
+        .identifier, // #ffffff
         .eos,
         .brace_end,
 

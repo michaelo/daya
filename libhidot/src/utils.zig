@@ -130,12 +130,12 @@ test "printPrettify" {
     try testing.expectEqualStrings("Hey Der", bufctx.slice());
     bufctx.reset();
 
-    try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{}); // TODO: unicode not handled
+    try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{}); // Att: unicode not handled
     try testing.expectEqualStrings("æøå æøå", bufctx.slice());
     bufctx.reset();
 
     // Not working
-    // try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{.do_caps=true}); // TODO: unicode not handled
+    // try printPrettify(@TypeOf(writer), writer, "æøå_æøå", .{.do_caps=true}); // Att: unicode not handled
     // try testing.expectEqualStrings("Æøå Æøå", bufctx.slice());
     // bufctx.reset();
 }

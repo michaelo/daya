@@ -7,8 +7,6 @@ const dot = @import("dot.zig");
 const sema = @import("sema.zig");
 
 const initBoundedArray = @import("utils.zig").initBoundedArray;
-const Tokenizer = @import("tokenizer.zig").Tokenizer;
-const tokenDump = @import("tokenizer.zig").dump;
 
 pub const LIB_VERSION = blk: {
     if (builtin.mode != .Debug) {
@@ -54,8 +52,6 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer:Wr
     // Include-handling
     var includes = try dif.findAllNodesOfType(include_results_buf[0..], document_root, .Include);
     // TODO: Testing first with single level of includes. Later: add to queue/stack and iteratively include up until <max level>
-    // TODO: Another strategy could also be to resolve includes as they appear, in-dif-tree wherever that might be. This will allow us
-    //       for sub-diagrams, but will also have to revise decision on everything in global scope.
     for (includes) |include| {
         // Read and tokenize
         units[units_idx] = try Unit.init(allocator, include.name.?);

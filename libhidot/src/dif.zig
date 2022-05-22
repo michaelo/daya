@@ -129,7 +129,7 @@ pub fn bufToDif(comptime MaxNodes: usize, node_pool: *std.BoundedArray(DifNode, 
     return try tokensToDif(MaxNodes, node_pool, &tokenizer, unit_name);
 }
 
-/// TODO: Implement support for a dynamicly allocatable nodepool (simply use ArrayList?)
+/// TODO: Implement support for a dynamicly allocatable node_pool (simply use ArrayList?)
 pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
     var state: DififierState = .start;
 
@@ -325,8 +325,8 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
 
 test "dif (parseTokensRecursively) parses include statement" {
     {
-        var nodePool = initBoundedArray(DifNode, 1024);
-        var root_a = try bufToDif(1024, &nodePool,
+        var node_pool = initBoundedArray(DifNode, 1024);
+        var root_a = try bufToDif(1024, &node_pool,
             \\@myfile.hidot
         , "test");
 
@@ -335,8 +335,8 @@ test "dif (parseTokensRecursively) parses include statement" {
     }
 
     {
-        var nodePool = initBoundedArray(DifNode, 1024);
-        var root_a = try bufToDif(1024, &nodePool,
+        var node_pool = initBoundedArray(DifNode, 1024);
+        var root_a = try bufToDif(1024, &node_pool,
             \\@myfile.hidot
             \\node Node;
         , "test");
@@ -348,7 +348,6 @@ test "dif (parseTokensRecursively) parses include statement" {
 }
 
 /// Join two dif-graphs: adds second to end of first
-/// TODO: This is in preparation for handling includes. Currently not in use.
 pub fn join(base_root: *DifNode, to_join: *DifNode) void {
     var current = base_root;
 
@@ -366,15 +365,15 @@ pub fn join(base_root: *DifNode, to_join: *DifNode) void {
 }
 
 test "join" {
-    var nodePool = initBoundedArray(DifNode, 1024);
-    var root_a = try bufToDif(1024, &nodePool,
+    var node_pool = initBoundedArray(DifNode, 1024);
+    var root_a = try bufToDif(1024, &node_pool,
         \\node Component;
         \\edge owns;
     , "test");
-    try testing.expectEqual(nodePool.slice().len, 3);
-    try testing.expectEqualStrings("owns", nodePool.slice()[2].name.?);
+    try testing.expectEqual(node_pool.slice().len, 3);
+    try testing.expectEqualStrings("owns", node_pool.slice()[2].name.?);
 
-    var root_b = try bufToDif(1024, &nodePool,
+    var root_b = try bufToDif(1024, &node_pool,
         \\compA: Component;
         \\compB: Component;
         \\compA owns compB;
@@ -382,9 +381,9 @@ test "join" {
 
     join(root_a, root_b);
 
-    try testing.expectEqual(nodePool.slice().len, 7);
-    try testing.expectEqualStrings("compA", nodePool.slice()[6].name.?);
-    try testing.expectEqual(DifNodeType.Relationship, nodePool.slice()[6].node_type);
+    try testing.expectEqual(node_pool.slice().len, 7);
+    try testing.expectEqualStrings("compA", node_pool.slice()[6].name.?);
+    try testing.expectEqual(DifNodeType.Relationship, node_pool.slice()[6].node_type);
 }
 
 // test/debug
@@ -406,12 +405,12 @@ pub fn dumpDifAst(node: *DifNode, level: u8) void {
 fn parseAndDump(buf: []const u8) void {
     tokenizerDump(buf);
     var tokenizer = Tokenizer.init(buf[0..]);
-    var nodePool = initBoundedArray(DifNode, 1024);
+    var node_pool = initBoundedArray(DifNode, 1024);
 
-    parseTokensRecursively(1024, &nodePool, &tokenizer, null) catch {
+    parseTokensRecursively(1024, &node_pool, &tokenizer, null) catch {
         debug("Got error parsing\n", .{});
     };
-    dumpDifAst(&nodePool.slice()[0], 0);
+    dumpDifAst(&node_pool.slice()[0], 0);
 }
 
 /// Traverse through DifNode-tree as identified by node. For all nodes matching node_type: add to result_buf.

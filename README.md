@@ -256,8 +256,9 @@ TODO
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Include-functionality:
-      * Consider revise to include in-place, rather than append to top-level document. This will allow for sub-diagrams. Need to reconsider scope-strategy.
-      * Support includes-in-includes
+      * Need to explore specific use cases to determine full functionality set here. Leaves as-is for now (1-level include, in-place + common global scope).
+      * Support includes-in-includes?
+      * Reconsider scoping to avoid unwanted collisions between subdiagrams + but still accommodate convenient definition-reuse.
     * Explicitly define behaviour wrt duplicate definitions; shall the latter be invalid behaviour, or shall they be fused? Either simply adding children, or explicitly checking for type and override values.
     * Simplify syntax: allow } as EOS. Don't require quotes around #-colors. Consider removing ; alltogether. Nl can serve the same purpose.
 * Finish v1 hidot-syntax: what is scope?

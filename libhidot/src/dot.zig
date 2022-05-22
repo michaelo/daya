@@ -244,12 +244,13 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
 
     // Check for note:
     if(instanceParams.note) |note| {
-        // TODO: generate node name (comment_NN?)? Or does dot support anonymous "inline"-nodes?
+        // TODO: currently using pointers to generate unique IDs. This won't create identical builds. Fix.
+        var note_idx = @ptrToInt(instance);
         try ctx.print(
             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
             \\note_{0x} -> "{2s}"[arrowtail=none,arrowhead=none,style=dashed];
             \\
-        , .{@ptrToInt(instance), note, instance.name});
+        , .{note_idx, note, instance.name});
     }
 }
 
@@ -356,7 +357,6 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
     while (true) {
         switch (node.node_type) {
             .Unit =>  {
-                // TODO: propagate the unit for use in e.g. error messages?
                 if (node.first_child) |child| {
                     try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap, groupMap);
                 }
@@ -383,7 +383,8 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
                     
                     // Check for note:
                     if(groupParams.note) |note| {
-                        var note_idx = @ptrToInt(instance); // TODO: Revise, as this doesn't provide identical reproducible builds (wrt to the dot-output)
+                        // TODO: currently using pointers to generate unique IDs. This won't create identical builds. Fix.
+                        var note_idx = @ptrToInt(instance);
                         try ctx.print(
                             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
                             \\note_{0x} -> {2s}[lhead=cluster_{2s},arrowtail=none,arrowhead=none,style=dashed];
