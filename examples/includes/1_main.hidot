@@ -1,0 +1,7 @@
+label="Test of inclusion of subdiagrams";
+
+// @1_subdiagram.hidot
+
+group Subgroup {
+    @1_subdiagram.hidot
+}

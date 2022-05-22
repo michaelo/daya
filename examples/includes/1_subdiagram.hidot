@@ -1,0 +1,8 @@
+node Node;
+
+edge controls;
+
+mynode: Node;
+othernode: Node;
+
+mynode controls othernode;

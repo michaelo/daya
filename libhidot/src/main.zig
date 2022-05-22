@@ -66,7 +66,10 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer:Wr
         var dif_root = try dif.bufToDif(1024, &node_pool, cur_unit.contents, cur_unit.path);
 
         // Join with main document
-        dif.join(document_root, dif_root);
+        // dif.join(document_root, dif_root);
+        // Join in at location of include-node
+        dif_root.next_sibling = include.next_sibling;
+        include.next_sibling = dif_root;
     }
 
     // TBD: Could also do incremental sema on unit by unit as they are parsed
