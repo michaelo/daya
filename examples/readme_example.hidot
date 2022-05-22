@@ -1,38 +1,7 @@
-// TODO: move to external file to demonstrate includes
-
-
-
 // Actual content in this
 label="My example diagram";
 
-// Define node-types
-node Interface {
-    label="<Interface>";
-    shape=diamond;
-    fgcolor=#666666;
-    bgcolor=#ffddaa;
-}
-
-node Module {
-    label="[Module]";
-    shape=box;
-    fgcolor=#000000;
-    bgcolor=#ffffff;
-}
-
-// Define edge-/relationship-types
-edge implements {
-    label="Implements";
-    edge_style=dashed;
-    target_symbol=arrow_open;
-}
-
-edge depends_on; // rely on defaults
-
-edge relates_to {
-    source_symbol=arrow_open;
-    target_symbol=arrow_open;
-}
+@readme_example_includes.hidot
 
 // Declare the module-instances, optionally grouped
 IIterator: Interface {

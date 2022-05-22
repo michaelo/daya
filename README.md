@@ -29,14 +29,14 @@ Create a .hidot file - e.g "gettingstarted.hidot":
     node System;
 
     // Create one or more edge types
-    edge uses;
+    edge controls;
 
     // Create instances based on node types
-    overlord: User;
+    emperor: User;
     deathstar: System;
 
     // Create relationships based on instances and edge types
-    overlord uses deathstar;
+    emperor controls deathstar;
 
 then run: ```hidot gettingstarted.hidot gettingstarted.png``` to create a diagram and save it as output.png for your viewing pleasures:
 
@@ -48,7 +48,7 @@ Hidot advanced format example:
 
 file: common_types.hidot:
 
-    // Define node-types
+    // Define common node-types
     node Interface {
         label="<Interface>";
         shape=diamond;
@@ -81,6 +81,8 @@ file: mygraph.hidot
 
     // imports the file as described above. Limitation: path can't contain newline
     @common_types.hidot
+
+    // Set title of diagram
     label="My example diagram";
 
     // Declare the module-instances, optionally grouped
@@ -90,6 +92,8 @@ file: mygraph.hidot
 
     group Core {
         note="You can add notes to groups";
+
+        // Groups are by default label-less (for now)
         label="Core";
 
         MySomething: Module;
@@ -248,11 +252,14 @@ TODO
 * Currently a lot of the defaults is handled within dot.zig - this is error-prone if we were to change graphing-backend
 * Support lifting notes to top level of generated doc? E.g. now, if added to an instance wihtin a group, the note also gets rendered within the same group
 * Support multiple files as input (glob?) + a parameter to specify output-format, which will reuse the respective input-names with added extension for output
+* Support monitor/auto-build?
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
-    * Implement import-functionality
+    * Include-functionality:
+      * Consider revise to include in-place, rather than append to top-level document. This will allow for sub-diagrams. Need to reconsider scope-strategy.
+      * Support includes-in-includes
     * Explicitly define behaviour wrt duplicate definitions; shall the latter be invalid behaviour, or shall they be fused? Either simply adding children, or explicitly checking for type and override values.
-    * Simplify syntax: allow } as EOS. Don't require quotes around #-colors.
+    * Simplify syntax: allow } as EOS. Don't require quotes around #-colors. Consider removing ; alltogether. Nl can serve the same purpose.
 * Finish v1 hidot-syntax: what is scope?
     * Ensure compilator supports entire hidot-syntax
 * Lower importance:
