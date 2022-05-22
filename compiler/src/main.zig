@@ -217,11 +217,9 @@ pub fn do(allocator: std.mem.Allocator, args: *AppArgs) errors!void {
     // var scrap: [1024]u8 = undefined;
     // var output_tmp_dot = std.fmt.bufPrint(scrap, "{s}", .{});
     try hidotFileToDotFile(allocator, args.input_file, TEMPORARY_FILE);
-    defer {
-        std.fs.cwd().deleteFile(TEMPORARY_FILE) catch |e| {
-            debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{TEMPORARY_FILE, e});
-        };
-    }
+    defer std.fs.cwd().deleteFile(TEMPORARY_FILE) catch |e| {
+        debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{TEMPORARY_FILE, e});
+    };
 
     switch(args.output_format) {
         .dot => {
@@ -246,7 +244,7 @@ pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []cons
         error.FileTooBig => return errors.TooLargeInputFile,
         error.FileNotFound, error.AccessDenied => return errors.CouldNotReadInputFile,
         else => {
-            debug("ERROR: Got error '{s}' while reading input file '{s}'\n", .{e, path_hidot_input});
+            debug("ERROR: Got error '{s}' while reading input file '{s}'\n", .{@errorName(e), path_hidot_input});
             return errors.ProcessError;
         },
     };
@@ -255,10 +253,13 @@ pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []cons
     var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch {
         return errors.ProcessError;
     };
+    errdefer std.fs.cwd().deleteFile(path_dot_output) catch |e| {
+        debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{path_dot_output, e});
+    };
     defer file.close();
     
     hidot.hidotToDot(allocator, std.fs.File.Writer, file.writer(), input_buffer[0..], path_hidot_input) catch |e| {
-        debug("ERROR: Got error when compiling ({s}), see messages above\n", .{e});
+        debug("ERROR: Got error '{s}' when compiling, see messages above\n", .{@errorName(e)});
         return errors.ProcessError;
     };
 }

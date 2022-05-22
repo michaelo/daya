@@ -146,8 +146,9 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
 
         switch (current.node_type) {
             .Node => {
-                if(ctx.node_map.get(node_name)) |_| {
+                if(ctx.node_map.get(node_name)) |conflict| {
                     ctx.printError(current, "Duplicate node definition, '{s}' already defined.", .{node_name});
+                    ctx.printError(conflict, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
 
@@ -158,8 +159,9 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
                 try ctx.node_map.put(node_name, current);
             },
             .Edge => {
-                if(ctx.edge_map.get(node_name)) |_| {
+                if(ctx.edge_map.get(node_name)) |conflict| {
                     ctx.printError(current, "Duplicate edge definition, '{s}' already defined.", .{node_name});
+                    ctx.printError(conflict, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
 
@@ -170,12 +172,13 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
                 try ctx.edge_map.put(node_name, current);
             },
             .Instantiation => {
-                if(ctx.instance_map.get(node_name)) |_| {
+                if(ctx.instance_map.get(node_name)) |conflict| {
                     ctx.printError(current, "Duplicate edge definition, '{s}' already defined.", .{node_name});
-                    // TODO: For all of these; add another printError: Previous defintions here: <ref to original node>
+                    ctx.printError(conflict, "Previous definition was here.", .{});
                     return error.Duplicate;
-                } else if(ctx.group_map.get(node_name)) |_| {
+                } else if(ctx.group_map.get(node_name)) |conflict| {
                     ctx.printError(current, "A group with name '{s}' already defined, can't create instance with same name.", .{node_name});
+                    ctx.printError(conflict, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
 
@@ -186,11 +189,13 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!
                 try ctx.instance_map.put(node_name, current);
             },
             .Group => {
-                if(ctx.group_map.get(node_name)) |_| {
+                if(ctx.group_map.get(node_name)) |conflict| {
                     ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(conflict, "Previous definition was here.", .{});
                     return error.Duplicate;
-                } else if(ctx.instance_map.get(node_name)) |_| {
+                } else if(ctx.instance_map.get(node_name)) |conflict| {
                     ctx.printError(current, "An instance with name '{s}' already defined, can't create group with same name.", .{node_name});
+                    ctx.printError(conflict, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
                 // TODO: Verify valid group fields
