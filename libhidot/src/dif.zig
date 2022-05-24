@@ -11,9 +11,9 @@ const tokenizerDump = @import("tokenizer.zig").dump;
 const debug = std.debug.print;
 const testing = std.testing;
 
-const initBoundedArray = utils.initBoundedArray;
+const ial = @import("indexedarraylist.zig");
 
-const ParseError = error{ UnexpectedToken, InvalidValue };
+const ParseError = error{ UnexpectedToken, InvalidValue, OutOfMemory };
 
 const DifNodeType = enum {
     Unit, // aka file - a top node intended to contain all the nodes parsed from the same source
@@ -32,9 +32,9 @@ pub const DifNode = struct {
 
     // Common fields
     node_type: DifNodeType,
-    parent: ?*Self = null,
-    first_child: ?*Self = null,
-    next_sibling: ?*Self = null,
+    parent: ?ial.Entry(Self) = null,
+    first_child: ?ial.Entry(Self) = null,
+    next_sibling: ?ial.Entry(Self) = null,
     initial_token: ?Token = null, // Reference back to source
     name: ?[]const u8 = null,
 
@@ -104,36 +104,36 @@ const DififierState = enum {
     definition, // Common type for any non-keyword-definition
 };
 
+/// Entry-function to module. Returns reference to first top-level node in graph, given a text buffer.
+pub fn bufToDif(node_pool: *ial.IndexedArrayList(DifNode), buf: []const u8, unit_name: []const u8) !ial.Entry(DifNode) {
+    var tokenizer = Tokenizer.init(buf);
+    return try tokensToDif(node_pool, &tokenizer, unit_name);
+}
+
 /// Entry-function to module. Returns reference to first top-level node in graph, given a tokenizer.
-pub fn tokensToDif(comptime MaxNodes: usize, node_pool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, unit_name: []const u8) !*DifNode {
-    var first_i = node_pool.slice().len;
+pub fn tokensToDif(node_pool: *ial.IndexedArrayList(DifNode), tokenizer: *Tokenizer, unit_name: []const u8) !ial.Entry(DifNode) {
+    var initial_len = node_pool.storage.items.len;
 
     // Create top-level node for unit
-    var unit_node = node_pool.addOneAssumeCapacity();
-    unit_node.* = DifNode{ .node_type = .Unit, .name = unit_name, .initial_token = null, .data = .{ .Unit = .{ .src_buf = tokenizer.buf } } };
+    var unit_node = node_pool.addOne() catch { return error.OutOfMemory; };
+    unit_node.get().* = DifNode{ .node_type = .Unit, .name = unit_name, .initial_token = null, .data = .{ .Unit = .{ .src_buf = tokenizer.buf } } };
 
-    parseTokensRecursively(MaxNodes, node_pool, tokenizer, unit_node) catch {
+    parseTokensRecursively(node_pool, tokenizer, unit_node) catch {
         return error.ParseError;
     };
 
-    if (node_pool.slice().len <= first_i) {
+    if (node_pool.storage.items.len <= initial_len) {
         return error.NothingFound;
     }
 
-    return &node_pool.slice()[first_i];
+    return unit_node;
 }
 
-/// Entry-function to module. Returns reference to first top-level node in graph, given a text buffer.
-pub fn bufToDif(comptime MaxNodes: usize, node_pool: *std.BoundedArray(DifNode, MaxNodes), buf: []const u8, unit_name: []const u8) !*DifNode {
-    var tokenizer = Tokenizer.init(buf);
-    return try tokensToDif(MaxNodes, node_pool, &tokenizer, unit_name);
-}
-
-/// TODO: Implement support for a dynamicly allocatable node_pool (simply use ArrayList?)
-pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedArray(DifNode, MaxNodes), tokenizer: *Tokenizer, parent: ?*DifNode) ParseError!void {
+pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokenizer: *Tokenizer, maybe_parent: ?ial.Entry(DifNode)) ParseError!void {
     var state: DififierState = .start;
 
-    var prev_sibling: ?*DifNode = null;
+    var parent = maybe_parent;
+    var prev_sibling: ?ial.Entry(DifNode) = null;
 
     var tok: Token = undefined;
     main: while (true) {
@@ -159,23 +159,17 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
 
                         // Create node for edge, with value=name-slice
                         // If data-chunk follows; recurse and pass current node as parent
-                        var node = node_pool.addOneAssumeCapacity();
-
-                        if (parent) |realparent| {
-                            if (realparent.first_child == null) {
-                                realparent.first_child = node;
-                            }
-                        }
+                        var node = node_pool.addOne() catch { return error.OutOfMemory; };
 
                         // Get label
                         var initial_token = tok;
                         tok = tokenizer.nextToken();
                         if (tok.typ != .identifier) {
-                            utils.parseError(tokenizer.buf, tok.start, "Expected identifier, got token type '{s}'", .{@tagName(tok.typ)});
+                            parseError(tokenizer.buf, tok.start, "Expected identifier, got token type '{s}'", .{@tagName(tok.typ)});
                             return error.UnexpectedToken;
                         }
 
-                        node.* = switch (initial_token.typ) {
+                        node.get().* = switch (initial_token.typ) {
                             .keyword_edge => DifNode{ .node_type = .Edge, .parent=parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Edge = .{} } },
                             .keyword_node => DifNode{ .node_type = .Node, .parent=parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Node = .{} } },
                             .keyword_group => DifNode{ .node_type = .Group, .parent=parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Group = .{} } },
@@ -183,8 +177,15 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                             else => unreachable, // as long as this set of cases matches the ones leading to this branch
                         };
 
-                        if (prev_sibling) |prev| {
-                            prev.next_sibling = node;
+                        if (parent) |*realparent| {
+                            if (realparent.get().first_child == null) {
+                                realparent.get().first_child = node;
+                            }
+                        }
+
+
+                        if (prev_sibling) |*prev| {
+                            prev.get().next_sibling = node;
                         }
                         prev_sibling = node;
 
@@ -193,19 +194,19 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                             .eos => {},
                             .brace_start => {
                                 // Recurse
-                                try parseTokensRecursively(MaxNodes, node_pool, tokenizer, node);
+                                try parseTokensRecursively(node_pool, tokenizer, node);
                             },
                             else => {
-                                utils.parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}', expected {{ or ;", .{@tagName(tok.typ)});
+                                parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}', expected {{ or ;", .{@tagName(tok.typ)});
                                 return error.UnexpectedToken;
                             },
                         }
                         state = .start;
                     },
                     .include => {
-                        var node = node_pool.addOneAssumeCapacity();
+                        var node = node_pool.addOne() catch { return error.OutOfMemory; };
 
-                        node.* = DifNode{
+                        node.get().* = DifNode{
                             .node_type = .Include,
                             .parent=parent,
                             .name = tok.slice[1..],
@@ -215,19 +216,19 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                             },
                         };
 
-                        if (parent) |realparent| {
-                            if (realparent.first_child == null) {
-                                realparent.first_child = node;
+                        if (parent) |*realparent| {
+                            if (realparent.get().first_child == null) {
+                                realparent.get().first_child = node;
                             }
                         }
 
-                        if (prev_sibling) |prev| {
-                            prev.next_sibling = node;
+                        if (prev_sibling) |*prev| {
+                            prev.get().next_sibling = node;
                         }
                         prev_sibling = node;
                     },
                     else => {
-                        utils.parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}'", .{@tagName(tok.typ)});
+                        parseError(tokenizer.buf, tok.start, "Unexpected token type '{s}'", .{@tagName(tok.typ)});
                         return error.UnexpectedToken;
                     },
                 }
@@ -241,21 +242,18 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
 
                 var token1 = tok;
                 std.debug.assert(token1.typ == .identifier);
+
                 var token2 = tokenizer.nextToken();
                 var token3 = tokenizer.nextToken();
 
-                var node = node_pool.addOneAssumeCapacity();
-
-                if (parent) |realparent| {
-                    if (realparent.first_child == null) {
-                        realparent.first_child = node;
-                    }
-                }
+                // TODO: these pointers don't remain valid. Need either a persistant area, or discrete allocations
+                //       could be resolved by storing indexes, then use those to traverse further. Perf?
+                var node = node_pool.addOne() catch { return error.OutOfMemory; };
 
                 switch (token2.typ) {
                     .equal => {
                         // key/value
-                        node.* = DifNode{
+                        node.get().* = DifNode{
                             .node_type = .Value,
                             .parent=parent,
                             .name = token1.slice,
@@ -270,7 +268,7 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                     },
                     .colon => {
                         // instantiation
-                        node.* = DifNode{ .node_type = .Instantiation, .parent=parent, .name = token1.slice, .initial_token = token1, .data = .{
+                        node.get().* = DifNode{ .node_type = .Instantiation, .parent=parent, .name = token1.slice, .initial_token = token1, .data = .{
                             .Instantiation = .{
                                 .target = token3.slice,
                             },
@@ -278,7 +276,7 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                     },
                     .identifier => {
                         // relationship
-                        node.* = DifNode{
+                        node.get().* = DifNode{
                             .node_type = .Relationship,
                             .parent=parent,
                             .name = token1.slice, // source... Otherwise create an ID here, and keep source, edge and target all in .data? (TODO)
@@ -292,13 +290,19 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                         };
                     },
                     else => {
-                        utils.parseError(tokenizer.buf, token2.start, "Unexpected token type '{s}', expected =, : or an identifier", .{@tagName(token2.typ)});
+                        parseError(tokenizer.buf, token2.start, "Unexpected token type '{s}', expected =, : or an identifier", .{@tagName(token2.typ)});
                         return error.UnexpectedToken;
                     }, // invalid
                 }
 
-                if (prev_sibling) |prev| {
-                    prev.next_sibling = node;
+                if (parent) |*realparent| {
+                    if (realparent.get().first_child == null) {
+                        realparent.get().first_child = node;
+                    }
+                }
+
+                if (prev_sibling) |*prev| {
+                    prev.get().next_sibling = node;
                 }
                 prev_sibling = node;
 
@@ -308,10 +312,10 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
                     // .brace_end,
                     .eos => {},
                     .brace_start => {
-                        try parseTokensRecursively(MaxNodes, node_pool, tokenizer, node);
+                        try parseTokensRecursively(node_pool, tokenizer, node);
                     },
                     else => {
-                        utils.parseError(tokenizer.buf, token4.start, "Unexpected token type '{s}', expected ; or {{", .{@tagName(token4.typ)});
+                        parseError(tokenizer.buf, token4.start, "Unexpected token type '{s}', expected ; or {{", .{@tagName(token4.typ)});
                         return error.UnexpectedToken;
                     }, // invalid
                 }
@@ -325,35 +329,39 @@ pub fn parseTokensRecursively(comptime MaxNodes: usize, node_pool: *std.BoundedA
 
 test "dif (parseTokensRecursively) parses include statement" {
     {
-        var node_pool = initBoundedArray(DifNode, 1024);
-        var root_a = try bufToDif(1024, &node_pool,
+        var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+        defer node_pool.deinit();
+
+        var root_a = try bufToDif(&node_pool,
             \\@myfile.hidot
         , "test");
 
-        try testing.expectEqual(DifNodeType.Include, root_a.first_child.?.node_type);
-        try testing.expectEqualStrings("myfile.hidot", root_a.first_child.?.name.?);
+        try testing.expectEqual(DifNodeType.Include, root_a.get().first_child.?.get().node_type);
+        try testing.expectEqualStrings("myfile.hidot", root_a.get().first_child.?.get().name.?);
     }
 
     {
-        var node_pool = initBoundedArray(DifNode, 1024);
-        var root_a = try bufToDif(1024, &node_pool,
+        var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+        defer node_pool.deinit();
+
+        var root_a = try bufToDif(&node_pool,
             \\@myfile.hidot
             \\node Node;
         , "test");
 
-        try testing.expectEqual(DifNodeType.Include, root_a.first_child.?.node_type);
-        try testing.expectEqualStrings("myfile.hidot", root_a.first_child.?.name.?);
-        try testing.expectEqual(DifNodeType.Node, root_a.first_child.?.next_sibling.?.node_type);
+        try testing.expectEqual(DifNodeType.Include, root_a.get().first_child.?.get().node_type);
+        try testing.expectEqualStrings("myfile.hidot", root_a.get().first_child.?.get().name.?);
+        try testing.expectEqual(DifNodeType.Node, root_a.get().first_child.?.get().next_sibling.?.get().node_type);
     }
 }
 
 /// Join two dif-graphs: adds second to end of first
-pub fn join(base_root: *DifNode, to_join: *DifNode) void {
+pub fn join(base_root: ial.Entry(DifNode), to_join: ial.Entry(DifNode)) void {
     var current = base_root;
 
     // Find last sibling
     while (true) {
-        if (current.next_sibling) |next| {
+        if (current.get().next_sibling) |next| {
             current = next;
         } else {
             break;
@@ -361,19 +369,21 @@ pub fn join(base_root: *DifNode, to_join: *DifNode) void {
     }
 
     // join to_join as as new sibling
-    current.next_sibling = to_join;
+    current.get().next_sibling = to_join;
 }
 
 test "join" {
-    var node_pool = initBoundedArray(DifNode, 1024);
-    var root_a = try bufToDif(1024, &node_pool,
+    var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+    defer node_pool.deinit();
+
+    var root_a = try bufToDif(&node_pool,
         \\node Component;
         \\edge owns;
     , "test");
-    try testing.expectEqual(node_pool.slice().len, 3);
-    try testing.expectEqualStrings("owns", node_pool.slice()[2].name.?);
+    try testing.expectEqual(node_pool.storage.items.len, 3);
+    try testing.expectEqualStrings("owns", node_pool.storage.items[2].name.?);
 
-    var root_b = try bufToDif(1024, &node_pool,
+    var root_b = try bufToDif(&node_pool,
         \\compA: Component;
         \\compB: Component;
         \\compA owns compB;
@@ -381,9 +391,9 @@ test "join" {
 
     join(root_a, root_b);
 
-    try testing.expectEqual(node_pool.slice().len, 7);
-    try testing.expectEqualStrings("compA", node_pool.slice()[6].name.?);
-    try testing.expectEqual(DifNodeType.Relationship, node_pool.slice()[6].node_type);
+    try testing.expectEqual(node_pool.storage.items.len, 7);
+    try testing.expectEqualStrings("compA", node_pool.storage.items[6].name.?);
+    try testing.expectEqual(DifNodeType.Relationship, node_pool.storage.items[6].node_type);
 }
 
 // test/debug
@@ -405,24 +415,42 @@ pub fn dumpDifAst(node: *DifNode, level: u8) void {
 fn parseAndDump(buf: []const u8) void {
     tokenizerDump(buf);
     var tokenizer = Tokenizer.init(buf[0..]);
-    var node_pool = initBoundedArray(DifNode, 1024);
+    var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+    defer node_pool.deinit();
+
 
     parseTokensRecursively(1024, &node_pool, &tokenizer, null) catch {
         debug("Got error parsing\n", .{});
     };
-    dumpDifAst(&node_pool.slice()[0], 0);
+    dumpDifAst(&node_pool.storage.items[0], 0);
+}
+
+pub fn parseError(src: []const u8, start_idx: usize, comptime fmt: []const u8, args: anytype) void {
+    const writer = std.io.getStdErr().writer();
+
+    var lc = utils.idxToLineCol(src, start_idx);
+    writer.print("PARSE ERROR ({d}:{d}): ", .{ lc.line, lc.col }) catch {};
+    writer.print(fmt, args) catch {};
+    writer.print("\n", .{}) catch {};
+    utils.dumpSrcChunkRef(@TypeOf(writer), writer, src, start_idx);
+    writer.print("\n", .{}) catch {};
+    var i: usize = 0;
+    if (lc.col > 0) while (i < lc.col - 1) : (i += 1) {
+        writer.print(" ", .{}) catch {};
+    };
+    writer.print("^\n", .{}) catch {};
 }
 
 /// Traverse through DifNode-tree as identified by node. For all nodes matching node_type: add to result_buf.
 /// Will fail with .TooManyMatches if num matches exceeds result_buf.len
-pub fn findAllNodesOfType(result_buf: []*DifNode, node: *DifNode, node_type: DifNodeType) error{TooManyMatches}![]*DifNode {
+pub fn findAllNodesOfType(result_buf: []ial.Entry(DifNode), node: ial.Entry(DifNode), node_type: DifNodeType) error{TooManyMatches}![]ial.Entry(DifNode) {
     var current = node;
 
     var next_idx: usize = 0;
 
     while (true) {
         // Got match?
-        if (current.node_type == node_type) {
+        if (current.get().node_type == node_type) {
             if (next_idx >= result_buf.len) return error.TooManyMatches;
 
             result_buf[next_idx] = current;
@@ -430,12 +458,12 @@ pub fn findAllNodesOfType(result_buf: []*DifNode, node: *DifNode, node_type: Dif
         }
 
         // Recurse into children sets
-        if (current.first_child) |child| {
+        if (current.get().first_child) |child| {
             next_idx += (try findAllNodesOfType(result_buf[next_idx..], child, node_type)).len;
         }
 
         // Iterate the sibling set
-        if (current.next_sibling) |next| {
+        if (current.get().next_sibling) |next| {
             current = next;
         } else {
             break;
@@ -449,14 +477,16 @@ test "findAllNodesOfType find all nodes of given type" {
 
     // Simple case: only sibling set
     {
-        var node_pool = initBoundedArray(DifNode, 16);
-        var root_a = try bufToDif(16, &node_pool,
+        var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+        defer node_pool.deinit();
+
+        var root_a = try bufToDif(&node_pool,
             \\node Component;
             \\edge owns;
             \\edge uses;
         , "test");
 
-        var result_buf: [16]*DifNode = undefined;
+        var result_buf: [16]ial.Entry(DifNode) = undefined;
 
         try testing.expectEqual((try findAllNodesOfType(result_buf[0..], root_a, DifNodeType.Node)).len, 1);
         try testing.expectEqual((try findAllNodesOfType(result_buf[0..], root_a, DifNodeType.Edge)).len, 2);
@@ -464,8 +494,10 @@ test "findAllNodesOfType find all nodes of given type" {
 
     // Advanced case: siblings and children
     {
-        var node_pool = initBoundedArray(DifNode, 16);
-        var root_a = try bufToDif(16, &node_pool,
+        var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+        defer node_pool.deinit();
+
+        var root_a = try bufToDif(&node_pool,
             \\edge woop;
             \\group mygroup {
             \\  edge owns;
@@ -474,7 +506,7 @@ test "findAllNodesOfType find all nodes of given type" {
             \\}
         , "test");
 
-        var result_buf: [16]*DifNode = undefined;
+        var result_buf: [16]ial.Entry(DifNode) = undefined;
 
         try testing.expectEqual((try findAllNodesOfType(result_buf[0..], root_a, DifNodeType.Edge)).len, 2);
         try testing.expectEqual((try findAllNodesOfType(result_buf[0..], root_a, DifNodeType.Node)).len, 2);
@@ -482,12 +514,14 @@ test "findAllNodesOfType find all nodes of given type" {
 }
 
 test "findAllNodesOfType fails with error.TooManyMatches if buffer too small" {
-    var node_pool = initBoundedArray(DifNode, 16);
-    var root_a = try bufToDif(16, &node_pool,
+    var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+    defer node_pool.deinit();
+
+    var root_a = try bufToDif(&node_pool,
         \\node Component;
     , "test");
 
-    var result_buf: [0]*DifNode = undefined;
+    var result_buf: [0]ial.Entry(DifNode) = undefined;
 
     try testing.expectError(error.TooManyMatches, findAllNodesOfType(result_buf[0..], root_a, DifNodeType.Node));
 }

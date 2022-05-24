@@ -1,10 +1,11 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 const dif = @import("dif.zig");
+const ial = @import("indexedarraylist.zig");
 const testing = std.testing;
 const any = utils.any;
 
-const DifNodeMap = std.StringHashMap(*dif.DifNode);
+const DifNodeMap = std.StringHashMap(ial.Entry(dif.DifNode));
 
 const SemaError = error {
     NodeWithNoName, Duplicate, OutOfMemory, InvalidField
@@ -15,14 +16,14 @@ pub fn SemaContext() type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        dif_root: *dif.DifNode,
+        dif_root: ial.Entry(dif.DifNode),
 
         node_map: DifNodeMap,
         edge_map: DifNodeMap,
         instance_map: DifNodeMap,
         group_map: DifNodeMap,
 
-        pub fn init(allocator: std.mem.Allocator, dif_root: *dif.DifNode) Self {
+        pub fn init(allocator: std.mem.Allocator, dif_root: ial.Entry(dif.DifNode)) Self {
             return Self{
                 .allocator = allocator,
                 .dif_root = dif_root,
@@ -33,10 +34,10 @@ pub fn SemaContext() type {
             };
         }
 
-        fn findUnit(node: *dif.DifNode) !*dif.DifNode {
+        fn findUnit(node: *ial.Entry(dif.DifNode)) !*ial.Entry(dif.DifNode) {
             var current = node;
-            while(current.node_type != .Unit) {
-                if(current.parent) |parent| {
+            while(current.get().node_type != .Unit) {
+                if(current.get().parent) |*parent| {
                     current = parent;
                 } else {
                     // Ending up here is a bug
@@ -46,27 +47,27 @@ pub fn SemaContext() type {
             return current;
         }
 
-        fn printError(self: *Self, node: *dif.DifNode, comptime fmt: []const u8, args: anytype) void {
+        fn printError(self: *Self, node: *ial.Entry(dif.DifNode), comptime fmt: []const u8, args: anytype) void {
             _ = self;
-            const errPrint = std.io.getStdErr().writer().print;
-            var unit = findUnit(node) catch {
-                errPrint("BUG: Could not find unit associated with node\n", .{}) catch {};
+            const err_writer = std.io.getStdErr().writer();
+            const unit = findUnit(node) catch {
+                err_writer.print("BUG: Could not find unit associated with node\n", .{}) catch {};
                 unreachable;
             };
-            var src_buf = unit.data.Unit.src_buf;
-            var lc = utils.idxToLineCol(src_buf, node.initial_token.?.start);
-            errPrint("ERROR {s} ({d}:{d}): ", .{unit.name.?, lc.line, lc.col}) catch {};
-            errPrint(fmt, args) catch {};
-            errPrint("\n", .{}) catch {};
-            utils.dumpSrcChunkRef(src_buf, node.initial_token.?.start);
-            errPrint("\n", .{}) catch {};
+            const src_buf = unit.get().data.Unit.src_buf;
+            const lc = utils.idxToLineCol(src_buf, node.get().initial_token.?.start);
+            err_writer.print("{s}:{d}:{d}: error: ", .{unit.get().name.?, lc.line, lc.col}) catch {};
+            err_writer.print(fmt, args) catch {};
+            err_writer.print("\n", .{}) catch {};
+            utils.dumpSrcChunkRef(@TypeOf(err_writer), err_writer, src_buf, node.get().initial_token.?.start);
+            err_writer.print("\n", .{}) catch {};
 
             // Print ^ at start of symbol
             var i: usize = 0;
             if(lc.col > 0) while(i<lc.col-1): (i+=1) {
-                errPrint(" ", .{}) catch {};
+                err_writer.print(" ", .{}) catch {};
             };
-            errPrint("^\n", .{}) catch {};
+            err_writer.print("^\n", .{}) catch {};
         }
 
         pub fn deinit(self: *Self) void {
@@ -93,7 +94,7 @@ pub fn SemaContext() type {
 /// 
 /// Returned SemaContext must be .deinit()'ed
 pub fn doSema(ctx: *SemaContext()) SemaError!void {
-    try processNoDupesRecursively(ctx, ctx.dif_root);
+    try processNoDupesRecursively(ctx, &ctx.dif_root);
 }
 
 fn isValidNodeField(field: []const u8) bool {
@@ -107,25 +108,25 @@ fn isValidEdgeField(field: []const u8) bool {
 }
 
 /// Verifies that all siblings' names passes the 'verificator'
-fn verifyFields(ctx: *SemaContext(), first_sibling: *dif.DifNode, verificator: fn(field: []const u8) bool) !void {
+fn verifyFields(ctx: *SemaContext(), first_sibling: *ial.Entry(dif.DifNode), verificator: fn(field: []const u8) bool) !void {
     var current = first_sibling;
 
     // Iterate over sibling set
     while(true) {
-        switch(current.node_type) {
+        switch(current.get().node_type) {
             .Value => {
-                if(!verificator(current.name.?)) {
-                    ctx.printError(current, "Unsupported parameter: '{s}'", .{current.name});
+                if(!verificator(current.get().name.?)) {
+                    ctx.printError(current, "Unsupported parameter: '{s}'", .{current.get().name});
                     return error.InvalidField;
                 }
             },
             else => {
-                ctx.printError(current, "Unsupported child-type '{s}' for: {s}", .{@TypeOf(current.node_type), current.name});
+                ctx.printError(current, "Unsupported child-type '{s}' for: {s}", .{@TypeOf(current.get().node_type), current.get().name});
                 return error.InvalidField;
             }
         }
 
-        if (current.next_sibling) |next| {
+        if (current.get().next_sibling) |*next| {
             current = next;
         } else {
             break;
@@ -135,86 +136,87 @@ fn verifyFields(ctx: *SemaContext(), first_sibling: *dif.DifNode, verificator: f
 
 /// Verify integrity of dif-graph. Fails on duplicate definitions and invalid fields.
 /// Aborts at first error.
-fn processNoDupesRecursively(ctx: *SemaContext(), node: *dif.DifNode) SemaError!void {
-    var current = node;
+fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode)) SemaError!void {
+    var current_ref = node;
 
     while(true) {
-        var node_name = current.name orelse {
+        const current = current_ref.get();
+        const node_name = current.name orelse {
             // Found node with no name... is it even possible at this stage? Bug, most likely
             return error.NodeWithNoName;
         };
 
         switch (current.node_type) {
             .Node => {
-                if(ctx.node_map.get(node_name)) |conflict| {
-                    ctx.printError(current, "Duplicate node definition, '{s}' already defined.", .{node_name});
-                    ctx.printError(conflict, "Previous definition was here.", .{});
+                if(ctx.node_map.get(node_name)) |*conflict_ref| {
+                    ctx.printError(current_ref, "Duplicate node definition, '{s}' already defined.", .{node_name});
+                    ctx.printError(conflict_ref, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
 
-                if(current.first_child) |child| {
+                if(current.first_child) |*child| {
                     try verifyFields(ctx, child, isValidNodeField);
                 }
 
-                try ctx.node_map.put(node_name, current);
+                try ctx.node_map.put(node_name, current_ref.*);
             },
             .Edge => {
-                if(ctx.edge_map.get(node_name)) |conflict| {
-                    ctx.printError(current, "Duplicate edge definition, '{s}' already defined.", .{node_name});
-                    ctx.printError(conflict, "Previous definition was here.", .{});
+                if(ctx.edge_map.get(node_name)) |*conflict_ref| {
+                    ctx.printError(current_ref, "Duplicate edge definition, '{s}' already defined.", .{node_name});
+                    ctx.printError(conflict_ref, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
 
-                if(current.first_child) |child| {
+                if(current.first_child) |*child| {
                     try verifyFields(ctx, child, isValidEdgeField);
                 }
 
-                try ctx.edge_map.put(node_name, current);
+                try ctx.edge_map.put(node_name, current_ref.*);
             },
             .Instantiation => {
-                if(ctx.instance_map.get(node_name)) |conflict| {
-                    ctx.printError(current, "Duplicate edge definition, '{s}' already defined.", .{node_name});
-                    ctx.printError(conflict, "Previous definition was here.", .{});
+                if(ctx.instance_map.get(node_name)) |*conflict_ref| {
+                    ctx.printError(current_ref, "Duplicate edge definition, '{s}' already defined.", .{node_name});
+                    ctx.printError(conflict_ref, "Previous definition was here.", .{});
                     return error.Duplicate;
-                } else if(ctx.group_map.get(node_name)) |conflict| {
-                    ctx.printError(current, "A group with name '{s}' already defined, can't create instance with same name.", .{node_name});
-                    ctx.printError(conflict, "Previous definition was here.", .{});
+                } else if(ctx.group_map.get(node_name)) |*conflict_ref| {
+                    ctx.printError(current_ref, "A group with name '{s}' already defined, can't create instance with same name.", .{node_name});
+                    ctx.printError(conflict_ref, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
 
-                if(current.first_child) |child| {
+                if(current.first_child) |*child| {
                     try verifyFields(ctx, child, isValidNodeField);
                 }
 
-                try ctx.instance_map.put(node_name, current);
+                try ctx.instance_map.put(node_name, current_ref.*);
             },
             .Group => {
-                if(ctx.group_map.get(node_name)) |conflict| {
-                    ctx.printError(current, "Duplicate edge definition, {s} already defined.", .{node_name});
-                    ctx.printError(conflict, "Previous definition was here.", .{});
+                if(ctx.group_map.get(node_name)) |*conflict_ref| {
+                    ctx.printError(current_ref, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(conflict_ref, "Previous definition was here.", .{});
                     return error.Duplicate;
-                } else if(ctx.instance_map.get(node_name)) |conflict| {
-                    ctx.printError(current, "An instance with name '{s}' already defined, can't create group with same name.", .{node_name});
-                    ctx.printError(conflict, "Previous definition was here.", .{});
+                } else if(ctx.instance_map.get(node_name)) |*conflict_ref| {
+                    ctx.printError(current_ref, "An instance with name '{s}' already defined, can't create group with same name.", .{node_name});
+                    ctx.printError(conflict_ref, "Previous definition was here.", .{});
                     return error.Duplicate;
                 }
                 // TODO: Verify valid group fields
-                try ctx.group_map.put(node_name, current);
+                try ctx.group_map.put(node_name, current_ref.*);
             },
             .Relationship => {
-                if(current.first_child) |child| {
+                if(current.first_child) |*child| {
                     try verifyFields(ctx, child, isValidEdgeField);
                 }
             },
             else => {},
         }
 
-        if (current.first_child) |child| {
+        if (current.first_child) |*child| {
             try processNoDupesRecursively(ctx, child);
         }
         
-        if (current.next_sibling) |next| {
-            current = next;
+        if (current.next_sibling) |*next| {
+            current_ref = next;
         } else {
             break;
         }
@@ -229,8 +231,10 @@ fn testSema(buf: []const u8) !void {
     const tokenizer = @import("tokenizer.zig");
 
     var tok = tokenizer.Tokenizer.init(buf);
-    var node_pool = utils.initBoundedArray(dif.DifNode, 1024);
-    var root_node = try dif.tokensToDif(1024, &node_pool, &tok, "test");
+    var node_pool = ial.IndexedArrayList(dif.DifNode).init(std.testing.allocator);
+    defer node_pool.deinit();
+
+    var root_node = try dif.tokensToDif(&node_pool, &tok, "test");
 
     var ctx = SemaContext().init(std.testing.allocator, root_node);
     errdefer ctx.deinit();

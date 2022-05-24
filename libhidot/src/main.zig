@@ -5,6 +5,7 @@ const testing = std.testing;
 const dif = @import("dif.zig");
 const dot = @import("dot.zig");
 const sema = @import("sema.zig");
+const ial = @import("indexedarraylist.zig");
 
 const initBoundedArray = @import("utils.zig").initBoundedArray;
 
@@ -41,31 +42,32 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer:Wr
     var units_idx: usize = 0;
     defer for(units[0..units_idx]) |*unit| unit.deinit();
 
-    var node_pool = initBoundedArray(dif.DifNode, 1024);
+    var node_pool = ial.IndexedArrayList(dif.DifNode).init(allocator);
+    defer node_pool.deinit();
 
     // Temporary storage for a single include-scan through a dif-tree
-    var include_results_buf: [128]*dif.DifNode = undefined; // arbitrary sized... (TODO)
+    var include_results_buf: [128]ial.Entry(dif.DifNode) = undefined; // arbitrary sized... (TODO)
 
     // Keep to append the rest of includes to later
-    var document_root = try dif.bufToDif(1024, &node_pool, buf, entry_file);
+    var document_root = try dif.bufToDif(&node_pool, buf, entry_file);
 
     // Include-handling
     var includes = try dif.findAllNodesOfType(include_results_buf[0..], document_root, .Include);
     // TODO: Testing first with single level of includes. Later: add to queue/stack and iteratively include up until <max level>
-    for (includes) |include| {
+    for (includes) |*include| {
         // Read and tokenize
-        units[units_idx] = try Unit.init(allocator, include.name.?);
+        units[units_idx] = try Unit.init(allocator, include.get().name.?);
         var cur_unit = &units[units_idx];
         units_idx += 1;
 
         // Convert to dif
-        var dif_root = try dif.bufToDif(1024, &node_pool, cur_unit.contents, cur_unit.path);
+        var dif_root = try dif.bufToDif(&node_pool, cur_unit.contents, cur_unit.path);
 
         // Join with main document
         // dif.join(document_root, dif_root);
         // Join in at location of include-node
-        dif_root.next_sibling = include.next_sibling;
-        include.next_sibling = dif_root;
+        dif_root.get().next_sibling = include.get().next_sibling;
+        include.get().next_sibling = dif_root;
     }
 
     // TBD: Could also do incremental sema on unit by unit as they are parsed
@@ -77,7 +79,7 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer:Wr
 
     var dot_ctx = dot.DotContext(Writer).init(writer);
 
-    try dot.difToDot(Writer, &dot_ctx, document_root, dot.DifNodeMapSet{
+    try dot.difToDot(Writer, &dot_ctx, &document_root, dot.DifNodeMapSet{
         .node_map = &sema_ctx.node_map,
         .edge_map = &sema_ctx.edge_map,
         .instance_map = &sema_ctx.instance_map,
