@@ -115,7 +115,9 @@ pub fn tokensToDif(node_pool: *ial.IndexedArrayList(DifNode), tokenizer: *Tokeni
     var initial_len = node_pool.storage.items.len;
 
     // Create top-level node for unit
-    var unit_node = node_pool.addOne() catch { return error.OutOfMemory; };
+    var unit_node = node_pool.addOne() catch {
+        return error.OutOfMemory;
+    };
     unit_node.get().* = DifNode{ .node_type = .Unit, .name = unit_name, .initial_token = null, .data = .{ .Unit = .{ .src_buf = tokenizer.buf } } };
 
     parseTokensRecursively(node_pool, tokenizer, unit_node) catch {
@@ -159,7 +161,9 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
 
                         // Create node for edge, with value=name-slice
                         // If data-chunk follows; recurse and pass current node as parent
-                        var node = node_pool.addOne() catch { return error.OutOfMemory; };
+                        var node = node_pool.addOne() catch {
+                            return error.OutOfMemory;
+                        };
 
                         // Get label
                         var initial_token = tok;
@@ -170,10 +174,10 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
                         }
 
                         node.get().* = switch (initial_token.typ) {
-                            .keyword_edge => DifNode{ .node_type = .Edge, .parent=parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Edge = .{} } },
-                            .keyword_node => DifNode{ .node_type = .Node, .parent=parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Node = .{} } },
-                            .keyword_group => DifNode{ .node_type = .Group, .parent=parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Group = .{} } },
-                            .keyword_layer => DifNode{ .node_type = .Layer, .parent=parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Layer = .{} } },
+                            .keyword_edge => DifNode{ .node_type = .Edge, .parent = parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Edge = .{} } },
+                            .keyword_node => DifNode{ .node_type = .Node, .parent = parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Node = .{} } },
+                            .keyword_group => DifNode{ .node_type = .Group, .parent = parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Group = .{} } },
+                            .keyword_layer => DifNode{ .node_type = .Layer, .parent = parent, .name = tok.slice, .initial_token = initial_token, .data = .{ .Layer = .{} } },
                             else => unreachable, // as long as this set of cases matches the ones leading to this branch
                         };
 
@@ -182,7 +186,6 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
                                 realparent.get().first_child = node;
                             }
                         }
-
 
                         if (prev_sibling) |*prev| {
                             prev.get().next_sibling = node;
@@ -204,11 +207,13 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
                         state = .start;
                     },
                     .include => {
-                        var node = node_pool.addOne() catch { return error.OutOfMemory; };
+                        var node = node_pool.addOne() catch {
+                            return error.OutOfMemory;
+                        };
 
                         node.get().* = DifNode{
                             .node_type = .Include,
-                            .parent=parent,
+                            .parent = parent,
                             .name = tok.slice[1..],
                             .initial_token = tok,
                             .data = .{
@@ -248,14 +253,16 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
 
                 // TODO: these pointers don't remain valid. Need either a persistant area, or discrete allocations
                 //       could be resolved by storing indexes, then use those to traverse further. Perf?
-                var node = node_pool.addOne() catch { return error.OutOfMemory; };
+                var node = node_pool.addOne() catch {
+                    return error.OutOfMemory;
+                };
 
                 switch (token2.typ) {
                     .equal => {
                         // key/value
                         node.get().* = DifNode{
                             .node_type = .Value,
-                            .parent=parent,
+                            .parent = parent,
                             .name = token1.slice,
                             .initial_token = token1,
                             .data = .{
@@ -268,7 +275,7 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
                     },
                     .colon => {
                         // instantiation
-                        node.get().* = DifNode{ .node_type = .Instantiation, .parent=parent, .name = token1.slice, .initial_token = token1, .data = .{
+                        node.get().* = DifNode{ .node_type = .Instantiation, .parent = parent, .name = token1.slice, .initial_token = token1, .data = .{
                             .Instantiation = .{
                                 .target = token3.slice,
                             },
@@ -278,7 +285,7 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
                         // relationship
                         node.get().* = DifNode{
                             .node_type = .Relationship,
-                            .parent=parent,
+                            .parent = parent,
                             .name = token1.slice, // source... Otherwise create an ID here, and keep source, edge and target all in .data? (TODO)
                             .initial_token = token1,
                             .data = .{
@@ -417,7 +424,6 @@ fn parseAndDump(buf: []const u8) void {
     var tokenizer = Tokenizer.init(buf[0..]);
     var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
     defer node_pool.deinit();
-
 
     parseTokensRecursively(1024, &node_pool, &tokenizer, null) catch {
         debug("Got error parsing\n", .{});

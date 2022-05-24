@@ -48,7 +48,7 @@ pub fn dumpSrcChunkRef(comptime Writer: type, writer: Writer, src: []const u8, s
     // Prints the line in which the start-idx resides.
     // Assumes idx'es are valid within src-range
     // Assumed used for error-scenarios, perf not a priority
-    var lc = idxToLineCol(src, start_idx);
+    const lc = idxToLineCol(src, start_idx);
 
     // Print until from start of line and until end of line/buf whichever comes first
     for (src[lc.line_start..]) |c| {
@@ -97,7 +97,7 @@ test "printPrettify" {
     var buf: [128]u8 = undefined;
     var bufctx = bufwriter.ArrayBuf{ .buf = buf[0..] };
 
-    var writer = bufctx.writer();
+    const writer = bufctx.writer();
 
     try printPrettify(@TypeOf(writer), writer, "label", .{});
     try testing.expectEqualStrings("label", bufctx.slice());
@@ -180,8 +180,8 @@ test "Color.fromHexstring" {
 /// Checks for string-needle in a string-haystack. TBD: Can generalize.
 pub fn any(comptime haystack: [][]const u8, needle: []const u8) bool {
     var found_any = false;
-    inline for(haystack) |candidate| {
-        if(std.mem.eql(u8, candidate, needle)) {
+    inline for (haystack) |candidate| {
+        if (std.mem.eql(u8, candidate, needle)) {
             found_any = true;
         }
     }

@@ -168,15 +168,15 @@ pub const Tokenizer = struct {
                             self.pos += 1;
                             break;
                         },
-                        else => {}
+                        else => {},
                     }
-                }
+                },
             }
         } else {
             // end of "file"
             result.end = self.pos;
 
-            if(state == .identifier_or_keyword) {
+            if (state == .identifier_or_keyword) {
                 result.typ = keywordOrIdentifier(self.buf[result.start..result.end]);
             }
         }
@@ -186,15 +186,15 @@ pub const Tokenizer = struct {
 };
 
 const keyword_map = .{
-    .{"node", TokenType.keyword_node},
-    .{"edge", TokenType.keyword_edge},
-    .{"group", TokenType.keyword_group},
-    .{"layer", TokenType.keyword_layer},
+    .{ "node", TokenType.keyword_node },
+    .{ "edge", TokenType.keyword_edge },
+    .{ "group", TokenType.keyword_group },
+    .{ "layer", TokenType.keyword_layer },
 };
 
 /// Evaluates a string against a known set of supported keywords
 fn keywordOrIdentifier(value: []const u8) TokenType {
-    inline for(keyword_map) |kv| {
+    inline for (keyword_map) |kv| {
         if (std.mem.eql(u8, value, kv[0])) {
             return kv[1];
         }
@@ -229,19 +229,19 @@ test "tokenizer tokenizes empty string" {
 test "tokenizer tokenizes string-tokens" {
     try expectTokens(
         \\"string here"
-        , &[_]TokenType{.string, .eof});
+    , &[_]TokenType{ .string, .eof });
 }
 
 test "tokenizer tokenizes identifier" {
     try expectTokens(
         \\unquoted_word_without_white-space
-        , &[_]TokenType{.identifier, .eof});
+    , &[_]TokenType{ .identifier, .eof });
 }
 
 test "tokenizer tokenizes keyword" {
     try expectTokens(
         \\node edge group layer
-        , &[_]TokenType{.keyword_node, .keyword_edge, .keyword_group, .keyword_layer, .eof});
+    , &[_]TokenType{ .keyword_node, .keyword_edge, .keyword_group, .keyword_layer, .eof });
 }
 
 test "tokenizer tokenizes import-statements" {

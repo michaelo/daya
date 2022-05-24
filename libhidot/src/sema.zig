@@ -109,25 +109,26 @@ fn isValidEdgeField(field: []const u8) bool {
 
 /// Verifies that all siblings' names passes the 'verificator'
 fn verifyFields(ctx: *SemaContext(), first_sibling: *ial.Entry(dif.DifNode), verificator: fn(field: []const u8) bool) !void {
-    var current = first_sibling;
+    var current_ref = first_sibling;
 
     // Iterate over sibling set
     while(true) {
-        switch(current.get().node_type) {
+        const current = current_ref.get();
+        switch(current.node_type) {
             .Value => {
-                if(!verificator(current.get().name.?)) {
-                    ctx.printError(current, "Unsupported parameter: '{s}'", .{current.get().name});
+                if(!verificator(current.name.?)) {
+                    ctx.printError(current_ref, "Unsupported parameter: '{s}'", .{current.name});
                     return error.InvalidField;
                 }
             },
             else => {
-                ctx.printError(current, "Unsupported child-type '{s}' for: {s}", .{@TypeOf(current.get().node_type), current.get().name});
+                ctx.printError(current_ref, "Unsupported child-type '{s}' for: {s}", .{@TypeOf(current.node_type), current.name});
                 return error.InvalidField;
             }
         }
 
-        if (current.get().next_sibling) |*next| {
-            current = next;
+        if (current.next_sibling) |*next| {
+            current_ref = next;
         } else {
             break;
         }
@@ -154,8 +155,8 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode))
                     return error.Duplicate;
                 }
 
-                if(current.first_child) |*child| {
-                    try verifyFields(ctx, child, isValidNodeField);
+                if(current.first_child) |*child_ref| {
+                    try verifyFields(ctx, child_ref, isValidNodeField);
                 }
 
                 try ctx.node_map.put(node_name, current_ref.*);
@@ -167,8 +168,8 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode))
                     return error.Duplicate;
                 }
 
-                if(current.first_child) |*child| {
-                    try verifyFields(ctx, child, isValidEdgeField);
+                if(current.first_child) |*child_ref| {
+                    try verifyFields(ctx, child_ref, isValidEdgeField);
                 }
 
                 try ctx.edge_map.put(node_name, current_ref.*);
@@ -184,8 +185,8 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode))
                     return error.Duplicate;
                 }
 
-                if(current.first_child) |*child| {
-                    try verifyFields(ctx, child, isValidNodeField);
+                if(current.first_child) |*child_ref| {
+                    try verifyFields(ctx, child_ref, isValidNodeField);
                 }
 
                 try ctx.instance_map.put(node_name, current_ref.*);
@@ -204,8 +205,8 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode))
                 try ctx.group_map.put(node_name, current_ref.*);
             },
             .Relationship => {
-                if(current.first_child) |*child| {
-                    try verifyFields(ctx, child, isValidEdgeField);
+                if(current.first_child) |*child_ref| {
+                    try verifyFields(ctx, child_ref, isValidEdgeField);
                 }
             },
             else => {},

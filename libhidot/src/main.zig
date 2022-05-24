@@ -36,11 +36,11 @@ const Unit = struct {
 
 /// Converts hidot data to dot, written to passed writer. If includes are found, it will attempt to read those files.
 /// Accepts a buf to allow simple entry-point to parse arbitrary strings and not requiring actual files.
-pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer:Writer, buf: []const u8, entry_file: []const u8) !void {
+pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: Writer, buf: []const u8, entry_file: []const u8) !void {
     // The actual buffers and path-references TBD: Doesn't need to allocate before we've found any actual includes
     var units: [128]Unit = undefined;
     var units_idx: usize = 0;
-    defer for(units[0..units_idx]) |*unit| unit.deinit();
+    defer for (units[0..units_idx]) |*unit| unit.deinit();
 
     var node_pool = ial.IndexedArrayList(dif.DifNode).init(allocator);
     defer node_pool.deinit();
@@ -90,13 +90,11 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer:Wr
 test "hidotToDot w/ includes" {
     const bufwriter = @import("bufwriter.zig");
     var out_buf: [1024]u8 = undefined;
-    var out_buf_context = bufwriter.ArrayBuf {
-        .buf = out_buf[0..]
-    };
+    var out_buf_context = bufwriter.ArrayBuf{ .buf = out_buf[0..] };
     var writer = out_buf_context.writer();
 
     try (try std.fs.cwd().openDir("testfiles", .{})).setAsCwd();
-    var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "include.hidot", 5*1024*1024);
+    var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "include.hidot", 5 * 1024 * 1024);
     defer std.testing.allocator.free(file_buf);
 
     try hidotToDot(std.testing.allocator, @TypeOf(writer), writer, file_buf, "include.hidot");

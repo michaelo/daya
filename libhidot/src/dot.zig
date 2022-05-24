@@ -22,7 +22,7 @@ const RenderError = error{
 };
 
 /// Pre-populated sets of indexes to the different difnodes
-pub const DifNodeMapSet = struct{
+pub const DifNodeMapSet = struct {
     node_map: *DifNodeMap,
     edge_map: *DifNodeMap,
     instance_map: *DifNodeMap,
@@ -67,8 +67,8 @@ pub fn DotContext(comptime Writer: type) type {
 
         fn findUnit(node: *ial.Entry(dif.DifNode)) !*ial.Entry(dif.DifNode) {
             var current = node;
-            while(current.get().node_type != .Unit) {
-                if(current.get().parent) |*parent| {
+            while (current.get().node_type != .Unit) {
+                if (current.get().parent) |*parent| {
                     current = parent;
                 } else {
                     // Ending up here is a bug
@@ -91,7 +91,7 @@ pub fn DotContext(comptime Writer: type) type {
             };
             const src_buf = unit.get().data.Unit.src_buf;
             const lc = utils.idxToLineCol(src_buf, node.get().initial_token.?.start);
-            err_writer.print("{s}:{d}:{d}: error: ", .{unit.get().name.?, lc.line, lc.col}) catch {};
+            err_writer.print("{s}:{d}:{d}: error: ", .{ unit.get().name.?, lc.line, lc.col }) catch {};
             err_writer.print(fmt, args) catch {};
             err_writer.print("\n", .{}) catch {};
             utils.dumpSrcChunkRef(@TypeOf(err_writer), err_writer, src_buf, node.get().initial_token.?.start);
@@ -99,7 +99,7 @@ pub fn DotContext(comptime Writer: type) type {
 
             // Print ^ at start of symbol
             var i: usize = 0;
-            if(lc.col > 0) while(i<lc.col-1): (i+=1) {
+            if (lc.col > 0) while (i < lc.col - 1) : (i += 1) {
                 err_writer.print(" ", .{}) catch {};
             };
             err_writer.print("^\n", .{}) catch {};
@@ -216,7 +216,7 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
         if (instanceParams.label) |label| {
             try ctx.print("{s}", .{label});
         } else if (instance.get().name) |name| {
-            try printPrettify(Writer, ctx.writer, name, .{.do_caps = true});
+            try printPrettify(Writer, ctx.writer, name, .{ .do_caps = true });
         }
 
         // Node-type-name/label
@@ -246,14 +246,14 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
     try ctx.print("];\n", .{});
 
     // Check for note:
-    if(instanceParams.note) |note| {
+    if (instanceParams.note) |note| {
         // TODO: currently using pointers to generate unique IDs. This won't create identical builds. Fix.
         var note_idx = instance.idx;
         try ctx.print(
             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
             \\note_{0x} -> "{2s}"[arrowtail=none,arrowhead=none,style=dashed];
             \\
-        , .{note_idx, note, instance.get().name});
+        , .{ note_idx, note, instance.get().name });
     }
 }
 
@@ -306,12 +306,12 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
     }
 
     // if source is group:
-    if(sourceNode.get().node_type == .Group) {
+    if (sourceNode.get().node_type == .Group) {
         try ctx.print("ltail=cluster_{s},", .{sourceNodeName});
     }
 
     // if target is group:
-    if(targetNode.get().node_type == .Group) {
+    if (targetNode.get().node_type == .Group) {
         try ctx.print("lhead=cluster_{s},", .{targetNodeName});
     }
 
@@ -323,21 +323,21 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
 
     try ctx.print("dir=both,", .{});
 
-    if(instanceParams.source_symbol orelse edgeParams.source_symbol) |source_symbol| {
+    if (instanceParams.source_symbol orelse edgeParams.source_symbol) |source_symbol| {
         var arrow = switch (source_symbol) {
             .arrow_open => "vee",
             .arrow_closed => "onormal",
             .arrow_filled => "normal",
             .none => "none",
         };
-        
+
         try ctx.print("arrowtail={s},", .{arrow});
     } else {
         try ctx.print("arrowtail=none,", .{});
     }
 
     // End edge
-    if(instanceParams.target_symbol orelse edgeParams.target_symbol) |target_symbol| {
+    if (instanceParams.target_symbol orelse edgeParams.target_symbol) |target_symbol| {
         var arrow = switch (target_symbol) {
             .arrow_open => "vee",
             .arrow_closed => "onormal",
@@ -359,7 +359,7 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
     // Iterate over siblings
     while (true) {
         switch (node.get().node_type) {
-            .Unit =>  {
+            .Unit => {
                 if (node.get().first_child) |*child| {
                     try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap, groupMap);
                 }
@@ -383,16 +383,16 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
                     // Checking group-fields in case of label, which shall be created outside of group
                     var groupParams: GroupParams = .{};
                     try getFieldsFromChildSet(Writer, ctx, @TypeOf(groupParams), child, &groupParams);
-                    
+
                     // Check for note:
-                    if(groupParams.note) |note| {
+                    if (groupParams.note) |note| {
                         // TODO: currently using pointers to generate unique IDs. This won't create identical builds. Fix.
                         var note_idx = instance.idx;
                         try ctx.print(
                             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
                             \\note_{0x} -> {2s}[lhead=cluster_{2s},arrowtail=none,arrowhead=none,style=dashed];
                             \\
-                        , .{note_idx, note, node.get().name});
+                        , .{ note_idx, note, node.get().name });
                     }
                 }
             },
@@ -425,13 +425,10 @@ pub fn difToDot(comptime Writer: type, ctx: *DotContext(Writer), root_node: *ial
     try ctx.print("}}\n", .{});
 }
 
-
 test "writeNodeFields" {
     // Go through each fields and verify that it gets converted as expected
     var buf: [1024]u8 = undefined;
-    var buf_context = bufwriter.ArrayBuf {
-        .buf = buf[0..]
-    };
+    var buf_context = bufwriter.ArrayBuf{ .buf = buf[0..] };
 
     var writer = buf_context.writer();
 
@@ -443,7 +440,7 @@ test "writeNodeFields" {
         \\}
         \\Node: MyNode;
         \\
-        ;
+    ;
 
     try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
@@ -457,9 +454,7 @@ test "writeNodeFields" {
 test "writeRelationshipFields" {
     // Go through each fields and verify that it gets converted as expected
     var buf: [1024]u8 = undefined;
-    var context = bufwriter.ArrayBuf {
-        .buf = buf[0..]
-    };
+    var context = bufwriter.ArrayBuf{ .buf = buf[0..] };
 
     var writer = context.writer();
 
@@ -474,7 +469,7 @@ test "writeRelationshipFields" {
         \\NodeB: MyNode;
         \\NodeA Uses NodeB;
         \\
-        ;
+    ;
 
     try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that

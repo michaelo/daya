@@ -70,12 +70,12 @@ test "performance comparisons" {
 
     const iterations = 100;
     const reps_pr_iteration = 100000;
-    
+
     // Testing the IndexedArrayList
     {
         var start = std.time.milliTimestamp();
         var iteration_counter: usize = 0;
-        while(iteration_counter < iterations) : (iteration_counter +=1) {
+        while (iteration_counter < iterations) : (iteration_counter += 1) {
             var mylist = IndexedArrayList(Data).init(std.testing.allocator);
             defer mylist.deinit();
 
@@ -87,7 +87,7 @@ test "performance comparisons" {
                 sum += el.get().*.val;
             }
         }
-        std.debug.print("time IndexedArrayList: {d}ms\n", .{@divTrunc(std.time.milliTimestamp()-start, iterations)});
+        std.debug.print("time IndexedArrayList: {d}ms\n", .{@divTrunc(std.time.milliTimestamp() - start, iterations)});
     }
 
     // Testing the std.ArrayList for comparison
@@ -95,7 +95,7 @@ test "performance comparisons" {
         var start = std.time.milliTimestamp();
 
         var iteration_counter: usize = 0;
-        while(iteration_counter < iterations) : (iteration_counter +=1) {
+        while (iteration_counter < iterations) : (iteration_counter += 1) {
             var mylist = std.ArrayList(Data).init(std.testing.allocator);
             defer mylist.deinit();
 
@@ -107,7 +107,7 @@ test "performance comparisons" {
                 sum += el.*.val;
             }
         }
-        std.debug.print("time std.ArrayList: {d}ms\n", .{@divTrunc(std.time.milliTimestamp()-start, iterations)});
+        std.debug.print("time std.ArrayList: {d}ms\n", .{@divTrunc(std.time.milliTimestamp() - start, iterations)});
     }
 }
 
