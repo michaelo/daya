@@ -37,45 +37,42 @@ const Unit = struct {
 /// Converts hidot data to dot, written to passed writer. If includes are found, it will attempt to read those files.
 /// Accepts a buf to allow simple entry-point to parse arbitrary strings and not requiring actual files.
 pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: Writer, buf: []const u8, entry_file: []const u8) !void {
-    // The actual buffers and path-references TBD: Doesn't need to allocate before we've found any actual includes
-    var units: [128]Unit = undefined;
-    var units_idx: usize = 0;
-    defer for (units[0..units_idx]) |*unit| unit.deinit();
+    // The actual buffers and path-references
+    // TODO: To avoid reading same file multiple times, revise this to be a hashmap with path as key.
+    var units = std.ArrayList(Unit).init(allocator);
+    defer units.deinit();
+    defer for (units.items) |*unit| unit.deinit();
 
     var node_pool = ial.IndexedArrayList(dif.DifNode).init(allocator);
     defer node_pool.deinit();
-
-    // Temporary storage for a single include-scan through a dif-tree
-    var include_results_buf: [128]ial.Entry(dif.DifNode) = undefined; // arbitrary sized... (TODO)
 
     // Keep to append the rest of includes to later
     var document_root = try dif.bufToDif(&node_pool, buf, entry_file);
 
     // Include-handling
-    var includes = try dif.findAllNodesOfType(include_results_buf[0..], document_root, .Include);
-    // TODO: Testing first with single level of includes. Later: add to queue/stack and iteratively include up until <max level>
-    for (includes) |*include| {
+    // Att! This will traverse the entire dif, including the newly included units. No check for duplicate includes, recursions etc.
+    // TODO: Add certain checks. E.g. do a sema of some sorts to ensure certain degree of correctness (as far as possible since all includes are possibly not included yet)?
+    var include_iterator = dif.DifTraverser.init(&document_root, .Include);
+
+    while (include_iterator.next()) |include| {
         // Read and tokenize
-        units[units_idx] = try Unit.init(allocator, include.get().name.?);
-        var cur_unit = &units[units_idx];
-        units_idx += 1;
+        var unit = try units.addOne();
+        // TODO: Set cwd to the folder of the file so any includes are handled relatively to file
+        unit.* = try Unit.init(allocator, include.name.?);
 
         // Convert to dif
-        var dif_root = try dif.bufToDif(&node_pool, cur_unit.contents, cur_unit.path);
+        var dif_root = try dif.bufToDif(&node_pool, unit.contents, unit.path);
 
-        // Join with main document
-        // dif.join(document_root, dif_root);
-        // Join in at location of include-node
-        dif_root.get().next_sibling = include.get().next_sibling;
-        include.get().next_sibling = dif_root;
+        // Join in at location of include-node (directly after)
+        dif_root.get().next_sibling = include.next_sibling;
+        include.next_sibling = dif_root;
     }
 
     // TBD: Could also do incremental sema on unit by unit as they are parsed
     var sema_ctx = sema.SemaContext().init(allocator, document_root);
-    errdefer sema_ctx.deinit();
+    defer sema_ctx.deinit();
 
     try sema.doSema(&sema_ctx);
-    defer sema_ctx.deinit();
 
     var dot_ctx = dot.DotContext(Writer).init(writer);
 
@@ -93,6 +90,7 @@ test "hidotToDot w/ includes" {
     var out_buf_context = bufwriter.ArrayBuf{ .buf = out_buf[0..] };
     var writer = out_buf_context.writer();
 
+    // TODO: Revert cwd
     try (try std.fs.cwd().openDir("testfiles", .{})).setAsCwd();
     var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "include.hidot", 5 * 1024 * 1024);
     defer std.testing.allocator.free(file_buf);
@@ -100,6 +98,21 @@ test "hidotToDot w/ includes" {
     try hidotToDot(std.testing.allocator, @TypeOf(writer), writer, file_buf, "include.hidot");
     try testing.expect(out_buf_context.slice().len > 0);
     // std.debug.print("Contents: {s}\n", .{out_buf_context.slice()});
+}
+
+
+test "hidotToDot w/ nested includes" {
+    const bufwriter = @import("bufwriter.zig");
+    var out_buf: [1024]u8 = undefined;
+    var out_buf_context = bufwriter.ArrayBuf{ .buf = out_buf[0..] };
+    var writer = out_buf_context.writer();
+
+    try (try std.fs.cwd().openDir("multiinclude", .{})).setAsCwd();
+    var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "main.hidot", 5 * 1024 * 1024);
+    defer std.testing.allocator.free(file_buf);
+
+    try hidotToDot(std.testing.allocator, @TypeOf(writer), writer, file_buf, "main.hidot");
+    try testing.expect(out_buf_context.slice().len > 0);
 }
 
 test "test entry" {

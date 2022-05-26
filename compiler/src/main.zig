@@ -90,6 +90,7 @@ pub fn do(allocator: std.mem.Allocator, args: *argparse.AppArgs) errors!void {
 
 /// 
 pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []const u8, path_dot_output: []const u8) errors!void {
+    // TODO: Set cwd to the folder of the file so any includes are handled relatively to file
     var input_buffer = std.fs.cwd().readFileAlloc(allocator, path_hidot_input, 10*1024*1024) catch |e| switch(e) {
         error.FileTooBig => return errors.TooLargeInputFile,
         error.FileNotFound, error.AccessDenied => return errors.CouldNotReadInputFile,

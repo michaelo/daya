@@ -3,17 +3,22 @@ hidot: Rapid text-based graphing tool
 
 Example usage of compiler:
 
-    hidot myfile.hidot output.dot
+    // Generate a png
     hidot myfile.hidot output.png
+
+    // Generate an svg
     hidot myfile.hidot output.svg
+
+    // Generate only the intermediary dot
+    hidot myfile.hidot output.dot
 
 hidot is a tool and library to convert from the .hidot format to regular .dot, .png or .svg.
 
-The hidot-format is intended to allow for rapid diagramming from text sources. Mostly relationship-like diagrams such as (UML's= activity-, component-diagrams etc. There are currently no plan to add features for sequence-diagrams and such.
+The hidot-format is intended to allow for rapid diagramming from text sources. Mostly relationship-like diagrams such as UML's activity- and component-diagrams etc. There are currently no plan to add features for sequence-diagrams and such.
 
-It can be thought of as "a subset of dot with custom types" (*).
+It can be thought of as "a subset of dot with custom types" (*). "Type" here are, due to the visual nature of it all, more comparable to CSS classes than types from strictly typed programming languages: they provide templates for how different parts shall appear.
 
-The subset of features, attributes and such is highly opiniated, and very much subject to change.
+The subset of features, attributes and such is highly opiniated, and very much subject to change as we move toward v1.0.
 
 (*): This is also to be read as; There are many, _many_ diagram-situations which are not intended to be solved by hidot.
 
@@ -247,8 +252,9 @@ Design goals
 
 TODO
 ---------
-* Integrate dot / libdot
+* Integrate dot / libdot statically linked
     * including libs for png and svg?
+* Ensure all include-paths are relative to the containing file.
 * Currently a lot of the defaults is handled within dot.zig - this is error-prone if we were to change graphing-backend
 * Support lifting notes to top level of generated doc? E.g. now, if added to an instance wihtin a group, the note also gets rendered within the same group
 * Support multiple files as input (glob?) + a parameter to specify output-format, which will reuse the respective input-names with added extension for output
@@ -256,8 +262,7 @@ TODO
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Include-functionality:
-      * Need to explore specific use cases to determine full functionality set here. Leaves as-is for now (1-level include, in-place + common global scope).
-      * Support includes-in-includes?
+      * Need to explore specific use cases to determine full functionality set here. Leaves as-is for now (in-place + common global scope).
       * Reconsider scoping to avoid unwanted collisions between subdiagrams + but still accommodate convenient definition-reuse.
     * Explicitly define behaviour wrt duplicate definitions; shall the latter be invalid behaviour, or shall they be fused? Either simply adding children, or explicitly checking for type and override values.
     * Simplify syntax: allow } as EOS. Don't require quotes around #-colors. Consider removing ; alltogether. Nl can serve the same purpose.

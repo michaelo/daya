@@ -409,12 +409,12 @@ pub fn dumpDifAst(node: *DifNode, level: u8) void {
     while (i < level) : (i += 1) debug("  ", .{});
     debug("{s}: {s}\n", .{ @tagName(node.node_type), node.name });
 
-    if (node.first_child) |child| {
-        dumpDifAst(child, level + 1);
+    if (node.first_child) |*child| {
+        dumpDifAst(child.get(), level + 1);
     }
 
-    if (node.next_sibling) |next| {
-        dumpDifAst(next, level);
+    if (node.next_sibling) |*next| {
+        dumpDifAst(next.get(), level);
     }
 }
 
@@ -532,21 +532,84 @@ test "findAllNodesOfType fails with error.TooManyMatches if buffer too small" {
     try testing.expectError(error.TooManyMatches, findAllNodesOfType(result_buf[0..], root_a, DifNodeType.Node));
 }
 
-// Att! This will require .parent on DifNode to allow for simple iteration
-// const DifTraverser = struct {
-//     const Self = @This();
+/// Iterator-like interface for searching a dif-tree. Depth-first.
+pub const DifTraverser = struct {
+    const Self = @This();
 
-//     var current: *DifNode;
-//     var node_type: DifNodeType;
+    next_node: ?*ial.Entry(DifNode),
+    node_type: DifNodeType,
 
-//     pub fn init(root: *DifNode, node_type: DifNodeType) Self {
-//         return Self {
-//             .current = root,
-//             .node_type = node_type
-//         };
-//     }
+    pub fn init(root: *ial.Entry(DifNode), node_type: DifNodeType) Self {
+        return Self {
+            .next_node = root,
+            .node_type = node_type
+        };
+    }
 
-//     pub fn next(self: *Self) ?*DifNode {
+    /// Will traverse each node in a well-formed dif-graph, depth-first, returning any
+    /// nodes of the desired node-type specified at .init().
+    /// Assumed that the .init()-specified root-node is the actual root of the dif-tree.
+    pub fn next(self: *Self) ?*DifNode {
+        while(self.next_node) |next_node| {
+            var to_check = next_node.get();
 
-//     }
-// };
+            // Traverse tree
+            if(to_check.first_child) |*child| {
+                self.next_node = child;
+            } else if (to_check.next_sibling) |*sibling| {
+                self.next_node = sibling;
+            } else if(to_check.parent) |*parent| {
+                // Any parent was already checked before traversing down, so:
+                // check if parent has sibling, otherwise go further up
+                var up_parent = parent;
+                blk: while(true) {
+                    if(up_parent.get().next_sibling) |*sibling| {
+                        self.next_node = sibling;
+                        break :blk;
+                    } else if(up_parent.get().parent) |*up_parent_parent| {
+                        up_parent = up_parent_parent;
+                    } else {
+                        // ingen parent, ingen sibling... The End!
+                        self.next_node = null;
+                        break :blk;
+                    }
+                }
+            } else {
+                // Reached end
+                self.next_node = null;
+            }
+
+            // Check current
+            if(to_check.node_type == self.node_type) {
+                return to_check;
+            }
+        }
+
+        return null;
+    }
+};
+
+test "DifTraverser" {
+    var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
+    defer node_pool.deinit();
+
+    var dif_root = try bufToDif(&node_pool, 
+    \\node Comp;
+    \\edge uses;
+    \\node Lib;
+    \\edge owns;
+    \\myComp: Comp;
+    \\group mygroup { node InGroupNode; }
+    \\myLib: Lib;
+    \\myComp uses myLib;
+    \\node Framework;
+    , "test");
+
+    var trav = DifTraverser.init(&dif_root, DifNodeType.Node);
+
+    try testing.expectEqual(DifNodeType.Node, trav.next().?.node_type);
+    try testing.expectEqual(DifNodeType.Node, trav.next().?.node_type);
+    try testing.expectEqualStrings("InGroupNode", trav.next().?.name.?);
+    try testing.expectEqualStrings("Framework", trav.next().?.name.?);
+    try testing.expect(trav.next() == null);
+}

@@ -165,7 +165,7 @@ fn getFieldsFromChildSet(comptime Writer: type, ctx: *DotContext(Writer), compti
                         }
                     },
                     else => {
-                        debug("ERROR: Unsupported ParamsType {s}\n", .{ParamsType});
+                        debug("ERROR: Unsupported ParamsType {s}. Most likely a bug.\n", .{ParamsType});
                         unreachable;
                     },
                 }
