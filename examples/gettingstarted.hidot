@@ -3,12 +3,12 @@ node User;
 node System;
 
 // Create one or more edge types
-edge uses;
+edge controls;
 
 // Create instances based on node types
-overlord: User;
+emperor: User;
 deathstar: System;
 
 // Create relationships based on instances and edge types
-overlord uses deathstar;
+emperor controls deathstar;
 
