@@ -38,10 +38,12 @@ const Unit = struct {
 /// Accepts a buf to allow simple entry-point to parse arbitrary strings and not requiring actual files.
 pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: Writer, buf: []const u8, entry_file: []const u8) !void {
     // The actual buffers and path-references
-    // TODO: To avoid reading same file multiple times, revise this to be a hashmap with path as key.
-    var units = std.ArrayList(Unit).init(allocator);
+    var units = std.StringHashMap(Unit).init(allocator);
     defer units.deinit();
-    defer for (units.items) |*unit| unit.deinit();
+    defer {
+        var it = units.valueIterator();
+        while (it.next()) |unit| unit.deinit();
+    }
 
     var node_pool = ial.IndexedArrayList(dif.DifNode).init(allocator);
     defer node_pool.deinit();
@@ -56,9 +58,13 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: W
 
     while (include_iterator.next()) |include| {
         // Read and tokenize
-        var unit = try units.addOne();
         // TODO: Set cwd to the folder of the file so any includes are handled relatively to file
-        unit.* = try Unit.init(allocator, include.name.?);
+        var unit = if (units.getPtr(include.name.?)) |val| blk: {
+            break :blk val;
+        } else blk: {
+            try units.put(include.name.?, try Unit.init(allocator, include.name.?));
+            break :blk units.getPtr(include.name.?).?;
+        };
 
         // Convert to dif
         var dif_root = try dif.bufToDif(&node_pool, unit.contents, unit.path);
