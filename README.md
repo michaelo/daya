@@ -258,6 +258,7 @@ TODO
 * Currently a lot of the defaults is handled within dot.zig - this is error-prone if we were to change graphing-backend
 * Support lifting notes to top level of generated doc? E.g. now, if added to an instance wihtin a group, the note also gets rendered within the same group
 * Support multiple files as input (glob?) + a parameter to specify output-format, which will reuse the respective input-names with added extension for output
+* Design and implement scoping strategy
 * Support monitor/auto-build?
 * .hidot
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?

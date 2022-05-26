@@ -275,62 +275,30 @@ test "tokenize exploration" {
 
     try expectTokens(buf, &[_]TokenType{
         // node Module {...}
-        .keyword_node,
-        .identifier,
-        .brace_start,
-        .identifier,
-        .equal,
-        .string,
-        .eos,
+        .keyword_node, .identifier, .brace_start,
+            .identifier, .equal, .string, .eos,
         .brace_end,
 
         // edge relates_to {...}
-        .keyword_edge,
-        .identifier,
-        .brace_start,
-        .identifier,
-        .equal,
-        .string,
-        .eos,
-
-        .identifier,
-        .equal,
-        .identifier, // #ffffff
-        .eos,
+        .keyword_edge, .identifier, .brace_start,
+            .identifier, .equal, .string, .eos,
+            .identifier, .equal, .identifier, .eos,
         .brace_end,
 
         // edge owns;
-        .keyword_edge,
-        .identifier,
-        .eos,
+        .keyword_edge, .identifier, .eos,
 
         // Instantations
-        .identifier,
-        .colon,
-        .identifier,
-        .eos,
-
-        .identifier,
-        .colon,
-        .identifier,
-        .eos,
+        .identifier, .colon, .identifier, .eos,
+        .identifier, .colon, .identifier, .eos,
 
         // Relationships
         // ModuleA relates_to ModuleB
-        .identifier,
-        .identifier,
-        .identifier,
-        .eos,
+        .identifier, .identifier, .identifier, .eos,
 
         // ModuleB owns ModuleA
-        .identifier,
-        .identifier,
-        .identifier,
-        .brace_start,
-        .identifier,
-        .equal,
-        .string,
-        .eos,
+        .identifier, .identifier, .identifier, .brace_start,
+            .identifier, .equal, .string, .eos,
         .brace_end,
 
         .eof,

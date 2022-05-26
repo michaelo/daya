@@ -245,11 +245,11 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
                 // relationship : identifier identifier identifier        + ; or {}
                 // Att! These can be followed by either ; or {  (e.g. can contain children-set), if so; recurse
 
-                var token1 = tok;
+                const token1 = tok;
                 std.debug.assert(token1.typ == .identifier);
 
-                var token2 = tokenizer.nextToken();
-                var token3 = tokenizer.nextToken();
+                const token2 = tokenizer.nextToken();
+                const token3 = tokenizer.nextToken();
 
                 // TODO: these pointers don't remain valid. Need either a persistant area, or discrete allocations
                 //       could be resolved by storing indexes, then use those to traverse further. Perf?
@@ -313,7 +313,7 @@ pub fn parseTokensRecursively(node_pool: *ial.IndexedArrayList(DifNode), tokeniz
                 }
                 prev_sibling = node;
 
-                var token4 = tokenizer.nextToken();
+                const token4 = tokenizer.nextToken();
 
                 switch (token4.typ) {
                     // .brace_end,

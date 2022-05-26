@@ -247,7 +247,6 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
 
     // Check for note:
     if (instanceParams.note) |note| {
-        // TODO: currently using pointers to generate unique IDs. This won't create identical builds. Fix.
         var note_idx = instance.idx;
         try ctx.print(
             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
@@ -386,7 +385,6 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
 
                     // Check for note:
                     if (groupParams.note) |note| {
-                        // TODO: currently using pointers to generate unique IDs. This won't create identical builds. Fix.
                         var note_idx = instance.idx;
                         try ctx.print(
                             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
@@ -432,7 +430,7 @@ test "writeNodeFields" {
 
     var writer = buf_context.writer();
 
-    var source =
+    const source =
         \\node MyNode {
         \\    label="My label";
         \\    fgcolor="#000000";
@@ -458,7 +456,7 @@ test "writeRelationshipFields" {
 
     var writer = context.writer();
 
-    var source =
+    const source =
         \\node MyNode {}
         \\edge Uses {
         \\    label="Edge label";

@@ -102,6 +102,7 @@ pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []cons
     defer allocator.free(input_buffer);
 
     var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch {
+        debug("ERROR: Got error '{s}' while attempting to create file '{s}'\n", .{@errorName(e), path_dot_output});
         return errors.ProcessError;
     };
     errdefer std.fs.cwd().deleteFile(path_dot_output) catch |e| {
@@ -148,4 +149,8 @@ fn callDot(allocator: std.mem.Allocator, input_file: []const u8, output_file: []
         allocator.free(result.stderr);
         allocator.free(result.stdout);
     }
+}
+
+test {
+    _ = @import("argparse.zig");
 }

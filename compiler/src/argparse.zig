@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const hidot = @import("hidot");
 const debug = std.debug.print;
 const main = @import("main.zig");
@@ -54,9 +55,9 @@ fn argIs(arg: []const u8, full: []const u8, short: ?[]const u8) bool {
 }
 
 fn argHasValue(arg: []const u8, full: []const u8, short: ?[]const u8) ?[]const u8 {
-    var eq_pos = std.mem.indexOf(u8, arg, "=") orelse return null;
+    const eq_pos = std.mem.indexOf(u8, arg, "=") orelse return null;
 
-    var key = arg[0..eq_pos];
+    const key = arg[0..eq_pos];
 
     if(argIs(key, full, short)) {
         return arg[eq_pos + 1 ..];
@@ -64,11 +65,11 @@ fn argHasValue(arg: []const u8, full: []const u8, short: ?[]const u8) ?[]const u
 }
 
 fn getLowercaseFileext(file: []const u8, scrap: []u8) ![]u8 {
-    var last_dot = std.mem.lastIndexOf(u8, file, ".") orelse return error.NoExtFound;
+    const last_dot = std.mem.lastIndexOf(u8, file, ".") orelse return error.NoExtFound;
     return std.ascii.lowerString(scrap, file[last_dot+1..]);
 }
 
-pub fn parseArgs(args: [][]const u8) !AppArgs {
+pub fn parseArgs(args: []const []const u8) !AppArgs {
     if(args.len < 1) {
         debug("ERROR: No arguments provided\n", .{});
         printHelp(false);
@@ -101,7 +102,7 @@ pub fn parseArgs(args: [][]const u8) !AppArgs {
 
         
         // Check for input file
-        var ext = getLowercaseFileext(arg, scrap[0..]) catch {
+        const ext = getLowercaseFileext(arg, scrap[0..]) catch {
             debug("WARNING: Could not read file-extension of argument '{s}' (ignoring)\n", .{arg});
             continue;
         };
@@ -122,17 +123,17 @@ pub fn parseArgs(args: [][]const u8) !AppArgs {
     }
 
     // Validate parsed args
-    var input_file = maybe_input_file orelse {
+    const input_file = maybe_input_file orelse {
         debug("ERROR: Missing input file\n", .{});
         return error.NoInputFile;
     };
 
-    var output_file = maybe_output_file orelse {
+    const output_file = maybe_output_file orelse {
         debug("ERROR: Missing output file\n", .{});
         return error.NoOutputFile;
     };
 
-    var output_format = maybe_output_format orelse {
+    const output_format = maybe_output_format orelse {
         debug("ERROR: Unknown output format\n", .{});
         return error.NoOutputFormat;
     };
@@ -143,4 +144,10 @@ pub fn parseArgs(args: [][]const u8) !AppArgs {
         .output_file = output_file,
         .output_format = output_format,
     };
+}
+
+test "ArgParse" {
+    try testing.expectError(error.OkExit, parseArgs(&.{"--help"}));
+    try testing.expectError(error.OkExit, parseArgs(&.{"-h"}));
+    try testing.expectError(error.OkExit, parseArgs(&.{"--version"}));
 }
