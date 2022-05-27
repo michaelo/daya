@@ -68,7 +68,7 @@ pub fn do(allocator: std.mem.Allocator, args: *argparse.AppArgs) errors!void {
     
     try hidotFileToDotFile(allocator, args.input_file, TEMPORARY_FILE);
     defer std.fs.cwd().deleteFile(TEMPORARY_FILE) catch |e| {
-        debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{TEMPORARY_FILE, e});
+        debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{TEMPORARY_FILE, @errorName(e)});
     };
 
     switch(args.output_format) {
@@ -81,7 +81,7 @@ pub fn do(allocator: std.mem.Allocator, args: *argparse.AppArgs) errors!void {
         .png, .svg => {
             // Call external dot to convert
             callDot(allocator, TEMPORARY_FILE, args.output_file, args.output_format) catch |e| {
-                debug("ERROR: dot failed - {s}\n", .{e});
+                debug("ERROR: dot failed - {s}\n", .{@errorName(e)});
                 return errors.ProcessError;
             };
         },
@@ -101,12 +101,12 @@ pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []cons
     };
     defer allocator.free(input_buffer);
 
-    var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch {
+    var file = std.fs.cwd().createFile(path_dot_output, .{ .truncate = true }) catch |e| {
         debug("ERROR: Got error '{s}' while attempting to create file '{s}'\n", .{@errorName(e), path_dot_output});
         return errors.ProcessError;
     };
     errdefer std.fs.cwd().deleteFile(path_dot_output) catch |e| {
-        debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{path_dot_output, e});
+        debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{path_dot_output, @errorName(e)});
     };
     defer file.close();
     
