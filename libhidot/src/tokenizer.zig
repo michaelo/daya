@@ -103,7 +103,7 @@ pub const Tokenizer = struct {
                             break;
                         },
                         // Whitespace of any kind are separators
-                        ' ', '\t', '\n' => {
+                        ' ', '\t', '\n', '\r' => {
                             result.start = self.pos + 1;
                         },
                         '@' => {
@@ -154,7 +154,7 @@ pub const Tokenizer = struct {
                 .single_line_comment => {
                     // Spin until end of line
                     switch (c) {
-                        '\n' => {
+                        '\n', '\r' => {
                             state = .start;
                         },
                         else => {},
@@ -163,7 +163,7 @@ pub const Tokenizer = struct {
                 .include => {
                     // Spin until end of line / buffer
                     switch (c) {
-                        '\n' => {
+                        '\n', '\r' => {
                             result.end = self.pos;
                             self.pos += 1;
                             break;
