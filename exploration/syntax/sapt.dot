@@ -1,20 +1,18 @@
 strict digraph {
 compound=true;
 subgraph cluster_Frontend {
-Frontend [shape=point,style=invis,height=0,width=0];    "Cli"[label="Cli
+Frontend [shape=point,style=invis,height=0,width=0];"Cli"[label="Cli
 <Module>",shape="square",];
-    "Help"[label="Help
+"Help"[label="Help
 <Module>",shape="square",];
 label="Frontend\n<Subsystem>";labelloc="t";
-shape="tullball";
 }
 subgraph cluster_Backend {
-Backend [shape=point,style=invis,height=0,width=0];    "Parser"[label="Parser
+Backend [shape=point,style=invis,height=0,width=0];"Parser"[label="Parser
 <Module>",shape="square",];
-    "Pretty"[label="Pretty
+"Pretty"[label="Pretty
 <Module>",shape="square",];
 label="Backend\n<Subsystem>";labelloc="t";
-shape="tullball";
 }
 "Cli" -> "Help"[label="implements",style="solid",dir=both,arrowtail=none,arrowhead=normal,];
 "Cli" -> "Parser"[label="depends on",style="solid",dir=both,arrowtail=none,arrowhead=normal,];

@@ -1,0 +1,64 @@
+// Scoping v1:
+// Scope by group.
+// If we want definitions into global scope: include at top.
+// If we want a stand-alone subdiagram: include into a group.
+
+// Decision: includes themselves has no affect on scope/namespace. An include is simple to be treated as if they've always been a part of the top level file.
+
+// This means that to add reference into node inside a group, we need to addess it properly.
+// How shall the scope be resolved? inside-out, or outside-in?
+// How to handle conflicts? Shall definitions within a group be able to shadow any outside? Do we need a global root-identifier to be explicit?
+// Can we within a group define a relationship to a node within another sibling-group? I'd say yes, as that would feel natural.
+// Shall all nodes, edges and instances be affected by scope? I'd say yes intuitively.
+// Possibility: separate between scoped groups and unscoped group. Somehow specify when there's an isolated group vs not.
+// Scope-separation-char: .? 
+
+
+node Component;
+comp: Component;
+edge depends_on;
+
+comp depends_on A.comp;
+
+group A {
+    node Component;
+    comp: Component;
+
+    comp depends_on B.comp;
+    comp depends_on $.comp; // $ being root-reference?
+}
+
+group B {
+    node Component;
+    comp: Component;
+}
+
+
+////////////////////
+
+node Component;
+comp: Component;
+edge depends_on;
+
+comp depends_on A.comp;
+
+group A {
+    node Component;
+    comp: Component;
+
+    comp depends_on B.comp; // depends on sub-group
+    comp depends_on $.B.comp; // depends
+    comp depends_on $.comp; // $ being root-reference?
+
+    group B {
+        node Component;
+        comp: Component;
+
+        comp depends_on .comp; // traverse up?
+    }
+}
+
+group B {
+    node Component;
+    comp: Component;
+}

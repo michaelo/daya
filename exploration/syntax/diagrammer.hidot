@@ -5,28 +5,28 @@ node Default {
 node Interface {
     label="[Interface]";
     shape=diamond;
-    color="#000000";
-    background="#AAAAAA";
+    fgcolor="#000000";
+    bgcolor="#AAAAAA";
 }
 
 node Module {
     label="[Module]";
     shape=box;
-    color=#000000;
-    background=#DDDDFF;
+    fgcolor=#000000;
+    bgcolor=#DDDDFF;
 }
 
 node Data {
     shape=cylinder;
-    color=#FF0000;
-    background=#99FF99;
+    fgcolor=#FF0000;
+    bgcolor=#99FF99;
 }
 
 node Actor {
     label="[Actor]";
     shape=polygon;
-    color="#000000";
-    background="#ffffff";
+    fgcolor="#000000";
+    bgcolor="#ffffff";
 }
 
 node ExternalDependency {
@@ -34,36 +34,36 @@ node ExternalDependency {
     shape=ellipse;
 }
 edge NoLabel {
-    style=solid;
+    edge_style=solid;
 }
 
 edge uses {
     label="Uses";
-    style=solid;
+    edge_style=solid;
     target_symbol=arrow_open;
 }
 
 edge implements {
     label="Implements";
-    style=dashed;
+    edge_style=dashed;
     target_symbol=arrow_open;
 }
 
 edge depends_on {
     label="Depends on";
-    style=solid;
+    edge_style=solid;
     target_symbol=arrow_open;
 }
 
 edge is_owned_by {
     label="Owned by";
-    style=dashed;
+    edge_style=dashed;
     source_symbol=arrow_closed;
 }
 
 edge knows_about {
     label="Knows about";
-    style=dashed;
+    edge_style=dashed;
     target_symbol=arrow_filled;
 }
 
