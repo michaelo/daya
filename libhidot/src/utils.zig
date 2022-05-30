@@ -193,3 +193,50 @@ test "any" {
     try testing.expect(any(haystack[0..], "label"));
     try testing.expect(!any(haystack[0..], "lable"));
 }
+
+/// Returns the slice which is without the last path-segment - but including any path-separator
+pub fn getParent(fileOrDir: []const u8) []const u8 {
+    if(fileOrDir.len == 0) return fileOrDir[0..];
+
+    var i: usize = fileOrDir.len - 1;
+    while (i > 0) : (i -= 1) {
+        if (fileOrDir[i] == '/' or fileOrDir[i] == '\\') {
+            break;
+        }
+    } else {
+        return fileOrDir[0..0];
+    }
+    return fileOrDir[0..i+1];
+}
+
+test "getParent" {
+    try testing.expectEqualStrings("", getParent("myfile"));
+    try testing.expectEqualStrings("folder/", getParent("folder/file"));
+}
+
+
+/// Combines the detected folder-segment of base_path with sub_path.
+pub fn pathRelativeTo(scrap: []u8, base_path: []const u8, sub_path: []const u8) ![]const u8 {
+    var parent = getParent(base_path);
+
+    std.mem.copy(u8, scrap, parent);
+    std.mem.copy(u8, scrap[parent.len..], sub_path);
+
+    return scrap[0..parent.len+sub_path.len];
+}
+
+test "pathRelativeTo" {
+    var scrap: [256]u8 = undefined;
+    try testing.expectEqualStrings("", try pathRelativeTo(scrap[0..], "", ""));
+
+    try testing.expectEqualStrings("relativebase/anotherfile", try pathRelativeTo(scrap[0..], "relativebase/file.txt", "anotherfile"));
+    try testing.expectEqualStrings("relativebase/anotherfile", try pathRelativeTo(scrap[0..], "relativebase/", "anotherfile"));
+    try testing.expectEqualStrings("anotherfile", try pathRelativeTo(scrap[0..], "justfile", "anotherfile"));
+
+    try testing.expectEqualStrings("relativebase\\anotherfile", try pathRelativeTo(scrap[0..], "relativebase\\file.txt", "anotherfile"));
+    try testing.expectEqualStrings("relativebase\\anotherfile", try pathRelativeTo(scrap[0..], "relativebase\\", "anotherfile"));
+
+
+    try testing.expectEqualStrings("relativebase\\", try pathRelativeTo(scrap[0..], "relativebase\\", ""));
+}
+
