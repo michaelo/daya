@@ -8,18 +8,18 @@ pub fn Entry(comptime T: type) type {
         storage: *const std.ArrayList(T),
         idx: usize, // index into .storage.items
 
-        pub inline fn get(self: *Self) *T {
+        pub fn get(self: *Self) *T {
             return &self.storage.items[self.idx];
         }
 
-        pub inline fn getConst(self: *Self) *const T {
+        pub fn getConst(self: *Self) *const T {
             return &self.storage.items[self.idx];
         }
     };
 }
 
-/// A wrapper for std.ArrayList to provide a way of accessing a relocatable
-/// area of heap-memory. Returns a struct with local idx + pointer to the std.ArrayList
+/// A wrapper for std.ArrayList (append-only) to provide a way of accessing a relocatable
+/// area of heap-memory. Returns a struct with local idx + pointer to the std.ArrayList when adding entries.
 pub fn IndexedArrayList(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -47,6 +47,7 @@ test "can add and get entries" {
     var mylist = IndexedArrayList(u64).init(std.testing.allocator);
     defer mylist.deinit();
 
+    // Add first entry
     var el = try mylist.addOne();
     try testing.expect(el.idx == 0);
     try testing.expect(el.storage == &mylist.storage);
@@ -54,7 +55,17 @@ test "can add and get entries" {
     el.get().* = 123;
 
     try testing.expect(el.get().* == 123);
-    try testing.expect(mylist.storage.items[0] == 123);
+
+    // Add second entry
+    var el2 = try mylist.addOne();
+    try testing.expect(el2.idx == 1);
+    try testing.expect(el2.storage == &mylist.storage);
+
+    el2.get().* = 321;
+
+    try testing.expect(el.get().* == 123);
+    try testing.expect(el2.get().* == 321);
+
 }
 
 // TODO: Performance tests, cache-friendliness
