@@ -52,6 +52,10 @@ pub const DifNode = struct {
         Relationship: struct {
             edge: []const u8,
             target: []const u8,
+            // TODO: include actual references to the nodes to be populated during sema?
+            // TBD: Can also implement a separate node structure with higher requirements of correctness - i.e. with minimal nulls, optionals and possibly already-resolved parameter lookups
+            //      This way the DifNode-structure is a "work in progress", and once properly built we can tighten it up. This way we can also better optimize for self-rolled renderer.
+            //      This new structure can also be nicely organized data-wise as we will have good control of the types of data as well as the total number of elements required for storage.
         },
         Value: struct {
             value: []const u8,

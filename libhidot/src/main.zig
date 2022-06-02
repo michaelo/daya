@@ -77,6 +77,9 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: W
     // TBD: Could also do incremental sema on unit by unit as they are parsed
     var sema_ctx = sema.SemaContext().init(allocator, document_root);
     defer sema_ctx.deinit();
+    
+    // TODO: Have sema produce a more proper data structure of verified integrity? That way the output-handlers (being the current dot, or a futere renderer) can be simplified
+    //       This will also allow us to be better prepared for the hypothetical self-rolled renderer.
 
     try sema.doSema(&sema_ctx);
 
