@@ -21,7 +21,7 @@ const RenderError = error{
     OutOfMemory,
 };
 
-/// Pre-populated sets of indexes to the different difnodes
+/// Pre-populated sets of indexes to the different types of difnodes
 pub const DifNodeMapSet = struct {
     node_map: *DifNodeMap,
     edge_map: *DifNodeMap,
@@ -29,6 +29,7 @@ pub const DifNodeMapSet = struct {
     group_map: *DifNodeMap,
 };
 
+/// To be populated with retrieved node-specific fields from a dif-node/tree
 const NodeParams = struct {
     label: ?[]const u8 = null,
     bgcolor: ?[]const u8 = null,
@@ -37,6 +38,7 @@ const NodeParams = struct {
     note: ?[]const u8 = null,
 };
 
+/// To be populated with retrieved edge-specific fields from a dif-node/tree
 const EdgeParams = struct {
     label: ?[]const u8 = null,
     edge_style: ?dif.EdgeStyle = null,
@@ -46,6 +48,8 @@ const EdgeParams = struct {
     target_label: ?[]const u8 = null,
 };
 
+/// To be populated with retrieved group-specific fields from a dif-node/tree
+/// The top level diagram is also considered a group in this context.
 const GroupParams = struct {
     label: ?[]const u8 = null,
     layout: ?[]const u8 = null,
@@ -78,7 +82,7 @@ pub fn DotContext(comptime Writer: type) type {
             return current;
         }
 
-        fn print(self: *Self, comptime fmt: []const u8, args: anytype) !void {
+        inline fn print(self: *Self, comptime fmt: []const u8, args: anytype) !void {
             try self.writer.print(fmt, args);
         }
 
@@ -87,6 +91,7 @@ pub fn DotContext(comptime Writer: type) type {
             const err_writer = std.io.getStdErr().writer();
             const unit = findUnit(node) catch {
                 err_writer.print("BUG: Could not find unit associated with node\n", .{}) catch {};
+                // TODO: Don't have to unreach here - can continue to render anything but the filename and source chunk
                 unreachable;
             };
             const src_buf = unit.get().data.Unit.src_buf;
@@ -180,30 +185,40 @@ fn getFieldsFromChildSet(comptime Writer: type, ctx: *DotContext(Writer), compti
     }
 }
 
-fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance: *ial.Entry(DifNode), nodeMap: *DifNodeMap) anyerror!void {
+fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance: *ial.Entry(DifNode), map_set: DifNodeMapSet) anyerror!void {
+    // Early opt out / safeguard. Most likely a bug
     if (instance.get().node_type != .Instantiation) {
         return RenderError.UnexpectedType;
     }
 
-    var instanceParams: NodeParams = .{};
-    var nodeParams: NodeParams = .{};
+    //
+    // Get all parameters of source, target and edge.
+    //
 
-    var nodeName = instance.get().data.Instantiation.target;
+    // This also verifies that the source/target nodes actually exists - this should probably be solved at sema (TODO)
+    var params_instance: NodeParams = .{};
+    var params_node: NodeParams = .{};
 
-    var node = nodeMap.get(nodeName) orelse {
-        ctx.printError(instance, "No node '{s}' found\n", .{nodeName});
+    var node_type_name = instance.get().data.Instantiation.target;
+
+    var node = map_set.node_map.get(node_type_name) orelse {
+        ctx.printError(instance, "No node '{s}' found\n", .{node_type_name});
         return RenderError.NoSuchNode;
     };
 
     // TODO: Dilemma; all other fields but label are overrides - if we could solve that, then we could just let
     //       both getNodeFieldsFromChildSet-calls take the same set according to presedence (node, then instantiation)
     if (instance.get().first_child) |*child| {
-        try getFieldsFromChildSet(Writer, ctx, @TypeOf(instanceParams), child, &instanceParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(params_instance), child, &params_instance);
     }
 
     if (node.get().first_child) |*child| {
-        try getFieldsFromChildSet(Writer, ctx, @TypeOf(nodeParams), child, &nodeParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(params_node), child, &params_node);
     }
+
+    //
+    // Generate the dot output
+    //
 
     // Print node name and start attr-list
     try ctx.print("\"{s}\"[", .{instance.get().name});
@@ -213,14 +228,14 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
         try ctx.print("label=\"", .{});
 
         // Instance-name/label
-        if (instanceParams.label) |label| {
+        if (params_instance.label) |label| {
             try ctx.print("{s}", .{label});
         } else if (instance.get().name) |name| {
             try printPrettify(Writer, ctx.writer, name, .{ .do_caps = true });
         }
 
         // Node-type-name/label
-        if (nodeParams.label orelse node.get().name) |node_label| {
+        if (params_node.label orelse node.get().name) |node_label| {
             try ctx.print("\n{s}", .{node_label});
         }
 
@@ -228,17 +243,17 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
     }
 
     // Shape
-    if (instanceParams.shape orelse nodeParams.shape) |shape| {
+    if (params_instance.shape orelse params_node.shape) |shape| {
         try ctx.print("shape=\"{s}\",", .{shape});
     }
 
     // Foreground
-    if (instanceParams.fgcolor orelse nodeParams.fgcolor) |fgcolor| {
+    if (params_instance.fgcolor orelse params_node.fgcolor) |fgcolor| {
         try ctx.print("fontcolor=\"{0s}\",", .{fgcolor});
     }
 
     // Background
-    if (instanceParams.bgcolor orelse nodeParams.bgcolor) |bgcolor| {
+    if (params_instance.bgcolor orelse params_node.bgcolor) |bgcolor| {
         try ctx.print("style=filled,bgcolor=\"{0s}\",fillcolor=\"{0s}\",", .{bgcolor});
     }
 
@@ -246,7 +261,7 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
     try ctx.print("];\n", .{});
 
     // Check for note:
-    if (instanceParams.note) |note| {
+    if (params_instance.note) |note| {
         var note_idx = instance.idx;
         try ctx.print(
             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
@@ -256,45 +271,54 @@ fn renderInstantiation(comptime Writer: type, ctx: *DotContext(Writer), instance
     }
 }
 
-fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance: *ial.Entry(DifNode), instanceMap: *DifNodeMap, edgeMap: *DifNodeMap, groupMap: *DifNodeMap) anyerror!void {
+fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance: *ial.Entry(DifNode), map_set: DifNodeMapSet) anyerror!void {
+    // Early opt out / safeguard. Most likely a bug
     if (instance.get().node_type != .Relationship) {
         return RenderError.UnexpectedType;
     }
 
-    var sourceNodeName = instance.get().name.?;
-    var edgeName = instance.get().data.Relationship.edge;
-    var targetNodeName = instance.get().data.Relationship.target;
+    //
+    // Get all parameters of source, target and edge.
+    //
+    // This also verifies that the source/target nodes actually exists - this should probably be solved at sema (TODO)
+    var node_name_source = instance.get().name.?;
+    var edge_name = instance.get().data.Relationship.edge;
+    var node_name_target = instance.get().data.Relationship.target;
 
-    var sourceNode = instanceMap.get(sourceNodeName) orelse groupMap.get(sourceNodeName) orelse {
-        ctx.printError(instance, "No instance or group '{s}' found\n", .{sourceNodeName});
+    var node_source = map_set.instance_map.get(node_name_source) orelse map_set.group_map.get(node_name_source) orelse {
+        ctx.printError(instance, "No instance or group '{s}' found\n", .{node_name_source});
         return error.NoSuchInstance;
     };
 
-    var targetNode = instanceMap.get(targetNodeName) orelse groupMap.get(targetNodeName) orelse {
-        ctx.printError(instance, "No instance or group '{s}' found\n", .{targetNodeName});
+    var node_target = map_set.instance_map.get(node_name_target) orelse map_set.group_map.get(node_name_target) orelse {
+        ctx.printError(instance, "No instance or group '{s}' found\n", .{node_name_target});
         return error.NoSuchInstance;
     };
 
-    var edge = edgeMap.get(edgeName) orelse {
-        ctx.printError(instance, "No edge '{s}' found\n", .{edgeName});
+    var edge = map_set.edge_map.get(edge_name) orelse {
+        ctx.printError(instance, "No edge '{s}' found\n", .{edge_name});
         return error.NoSuchEdge;
     };
 
-    var instanceParams: EdgeParams = .{};
-    var edgeParams: EdgeParams = .{};
+    var params_instance: EdgeParams = .{};
+    var params_edge: EdgeParams = .{};
 
     if (instance.get().first_child) |*child| {
-        try getFieldsFromChildSet(Writer, ctx, @TypeOf(instanceParams), child, &instanceParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(params_instance), child, &params_instance);
     }
 
     if (edge.get().first_child) |*child| {
-        try getFieldsFromChildSet(Writer, ctx, @TypeOf(edgeParams), child, &edgeParams);
+        try getFieldsFromChildSet(Writer, ctx, @TypeOf(params_edge), child, &params_edge);
     }
 
-    try ctx.print("\"{s}\" -> \"{s}\"[", .{ sourceNode.get().name, targetNode.get().name });
+    //
+    // Generate the dot output
+    //
+
+    try ctx.print("\"{s}\" -> \"{s}\"[", .{ node_source.get().name, node_target.get().name });
 
     // Label
-    if (instanceParams.label orelse edgeParams.label) |label| {
+    if (params_instance.label orelse params_edge.label) |label| {
         try ctx.print("label=\"{s}\",", .{label});
     } else {
         if (edge.get().name) |label| {
@@ -305,24 +329,24 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
     }
 
     // if source is group:
-    if (sourceNode.get().node_type == .Group) {
-        try ctx.print("ltail=cluster_{s},", .{sourceNodeName});
+    if (node_source.get().node_type == .Group) {
+        try ctx.print("ltail=cluster_{s},", .{node_name_source});
     }
 
     // if target is group:
-    if (targetNode.get().node_type == .Group) {
-        try ctx.print("lhead=cluster_{s},", .{targetNodeName});
+    if (node_target.get().node_type == .Group) {
+        try ctx.print("lhead=cluster_{s},", .{node_name_target});
     }
 
     // Style
-    var edge_style = instanceParams.edge_style orelse edgeParams.edge_style orelse dif.EdgeStyle.solid;
+    var edge_style = params_instance.edge_style orelse params_edge.edge_style orelse dif.EdgeStyle.solid;
 
     // Start edge
     try ctx.print("style=\"{s}\",", .{std.meta.tagName(edge_style)});
 
     try ctx.print("dir=both,", .{});
 
-    if (instanceParams.source_symbol orelse edgeParams.source_symbol) |source_symbol| {
+    if (params_instance.source_symbol orelse params_edge.source_symbol) |source_symbol| {
         var arrow = switch (source_symbol) {
             .arrow_open => "vee",
             .arrow_closed => "onormal",
@@ -336,7 +360,7 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
     }
 
     // End edge
-    if (instanceParams.target_symbol orelse edgeParams.target_symbol) |target_symbol| {
+    if (params_instance.target_symbol orelse params_edge.target_symbol) |target_symbol| {
         var arrow = switch (target_symbol) {
             .arrow_open => "vee",
             .arrow_closed => "onormal",
@@ -352,7 +376,8 @@ fn renderRelationship(comptime Writer: type, ctx: *DotContext(Writer), instance:
 }
 
 /// Recursive
-fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *ial.Entry(DifNode), nodeMap: *DifNodeMap, edgeMap: *DifNodeMap, instanceMap: *DifNodeMap, groupMap: *DifNodeMap) anyerror!void {
+/// TODO: Specify which node-types to render? To e.g. render only nodes, groups, notes (and note-edges) - or only edges
+fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *ial.Entry(DifNode), map_set: DifNodeMapSet) anyerror!void {
     var node = instance;
 
     // Iterate over siblings
@@ -360,14 +385,14 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
         switch (node.get().node_type) {
             .Unit => {
                 if (node.get().first_child) |*child| {
-                    try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap, groupMap);
+                    try renderGeneration(Writer, ctx, child, map_set);
                 }
             },
             .Instantiation => {
-                try renderInstantiation(Writer, ctx, node, nodeMap);
+                try renderInstantiation(Writer, ctx, node, map_set);
             },
             .Relationship => {
-                try renderRelationship(Writer, ctx, node, instanceMap, edgeMap, groupMap);
+                try renderRelationship(Writer, ctx, node, map_set);
             },
             .Group => {
                 // Recurse on groups
@@ -376,15 +401,15 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
 
                     // Invisible point inside group, used to create edges to/from groups
                     try ctx.print("{s} [shape=point,style=invis,height=0,width=0];", .{node.get().name});
-                    try renderGeneration(Writer, ctx, child, nodeMap, edgeMap, instanceMap, groupMap);
+                    try renderGeneration(Writer, ctx, child, map_set);
                     try ctx.print("}}\n", .{});
 
                     // Checking group-fields in case of label, which shall be created outside of group
-                    var groupParams: GroupParams = .{};
-                    try getFieldsFromChildSet(Writer, ctx, @TypeOf(groupParams), child, &groupParams);
+                    var params_group: GroupParams = .{};
+                    try getFieldsFromChildSet(Writer, ctx, @TypeOf(params_group), child, &params_group);
 
                     // Check for note:
-                    if (groupParams.note) |note| {
+                    if (params_group.note) |note| {
                         var note_idx = instance.idx;
                         try ctx.print(
                             \\note_{0x}[label="{1s}",style=filled,fillcolor="#ffffaa",shape=note];
@@ -405,21 +430,21 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
     }
 
     // Group-level attributes
-    var groupParams: GroupParams = .{};
-    try getFieldsFromChildSet(Writer, ctx, @TypeOf(groupParams), instance, &groupParams);
+    var params_group: GroupParams = .{};
+    try getFieldsFromChildSet(Writer, ctx, @TypeOf(params_group), instance, &params_group);
 
-    if (groupParams.label) |label| {
+    if (params_group.label) |label| {
         try ctx.print("label=\"{s}\";labelloc=\"t\";\n", .{label});
     }
 
-    if (groupParams.layout) |layout| {
+    if (params_group.layout) |layout| {
         try ctx.print("layout=\"{s}\";\n", .{layout});
     }
 }
 
 pub fn difToDot(comptime Writer: type, ctx: *DotContext(Writer), root_node: *ial.Entry(DifNode), map_set: DifNodeMapSet) !void {
     try ctx.print("strict digraph {{\ncompound=true;\n", .{});
-    try renderGeneration(Writer, ctx, root_node, map_set.node_map, map_set.edge_map, map_set.instance_map, map_set.group_map);
+    try renderGeneration(Writer, ctx, root_node, map_set);
     try ctx.print("}}\n", .{});
 }
 
