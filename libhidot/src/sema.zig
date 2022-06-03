@@ -4,11 +4,13 @@ const dif = @import("dif.zig");
 const ial = @import("indexedarraylist.zig");
 const testing = std.testing;
 const any = utils.any;
+const DifNode = dif.DifNode;
+const debug = std.debug.print;
 
-const DifNodeMap = std.StringHashMap(ial.Entry(dif.DifNode));
+const DifNodeMap = std.StringHashMap(ial.Entry(DifNode));
 
 const SemaError = error {
-    NodeWithNoName, Duplicate, OutOfMemory, InvalidField
+    NodeWithNoName, Duplicate, OutOfMemory, InvalidField, InvalidReference, InvalidValue
 };
 
 pub fn SemaContext() type {
@@ -16,14 +18,14 @@ pub fn SemaContext() type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        dif_root: ial.Entry(dif.DifNode),
+        dif_root: ial.Entry(DifNode),
 
         node_map: DifNodeMap,
         edge_map: DifNodeMap,
         instance_map: DifNodeMap,
         group_map: DifNodeMap,
 
-        pub fn init(allocator: std.mem.Allocator, dif_root: ial.Entry(dif.DifNode)) Self {
+        pub fn init(allocator: std.mem.Allocator, dif_root: ial.Entry(DifNode)) Self {
             return Self{
                 .allocator = allocator,
                 .dif_root = dif_root,
@@ -34,7 +36,7 @@ pub fn SemaContext() type {
             };
         }
 
-        fn findUnit(node: *ial.Entry(dif.DifNode)) !*ial.Entry(dif.DifNode) {
+        fn findUnit(node: *ial.Entry(DifNode)) !*ial.Entry(DifNode) {
             var current = node;
             while(current.get().node_type != .Unit) {
                 if(current.get().parent) |*parent| {
@@ -47,7 +49,7 @@ pub fn SemaContext() type {
             return current;
         }
 
-        fn printError(self: *Self, node: *ial.Entry(dif.DifNode), comptime fmt: []const u8, args: anytype) void {
+        fn printError(self: *Self, node: *ial.Entry(DifNode), comptime fmt: []const u8, args: anytype) void {
             _ = self;
             const err_writer = std.io.getStdErr().writer();
             const unit = findUnit(node) catch {
@@ -63,10 +65,7 @@ pub fn SemaContext() type {
             err_writer.print("\n", .{}) catch {};
 
             // Print ^ at start of symbol
-            var i: usize = 0;
-            if(lc.col > 0) while(i<lc.col-1): (i+=1) {
-                err_writer.print(" ", .{}) catch {};
-            };
+            err_writer.writeByteNTimes(' ', lc.col-1) catch {};
             err_writer.print("^\n", .{}) catch {};
         }
 
@@ -77,6 +76,81 @@ pub fn SemaContext() type {
             self.group_map.deinit();
         }
     };
+}
+
+
+/// Extracts a set of predefined key/values, based on the particular ParamsType
+fn getFieldsFromChildSet(ctx: *SemaContext(), comptime ParamsType: type, first_sibling: *ial.Entry(DifNode), result: *ParamsType) !void {
+    var node_ref = first_sibling;
+    while (true) {
+        const node = node_ref.get();
+        // check node type: We're only looking for value-types
+        if (node.node_type == .Value) {
+            if (node.name) |param_name| {
+                var value = node.data.Value.value;
+
+                switch (ParamsType) {
+                    dif.NodeParams => {
+                        if (std.mem.eql(u8, "label", param_name)) {
+                            result.label = value;
+                        } else if (std.mem.eql(u8, "bgcolor", param_name)) {
+                            result.bgcolor = value;
+                        } else if (std.mem.eql(u8, "fgcolor", param_name)) {
+                            result.fgcolor = value;
+                        } else if (std.mem.eql(u8, "shape", param_name)) {
+                            result.shape = value;
+                        } else if (std.mem.eql(u8, "note", param_name)) {
+                            result.note = value;
+                        }
+                    },
+                    dif.EdgeParams => {
+                        if (std.mem.eql(u8, "label", param_name)) {
+                            result.label = value;
+                        } else if (std.mem.eql(u8, "edge_style", param_name)) {
+                            result.edge_style = dif.EdgeStyle.fromString(value) catch |e| {
+                                ctx.printError(node_ref, "Invalid value for field 'edge_style': {s}", .{value});
+                                return e;
+                            };
+                        } else if (std.mem.eql(u8, "source_symbol", param_name)) {
+                            result.source_symbol = dif.EdgeEndStyle.fromString(value) catch |e| {
+                                ctx.printError(node_ref, "Invalid value for field 'source_symbol': {s}", .{value});
+                                return e;
+                            };
+                        } else if (std.mem.eql(u8, "target_symbol", param_name)) {
+                            result.target_symbol = dif.EdgeEndStyle.fromString(value) catch |e| {
+                                ctx.printError(node_ref, "Invalid value for field 'target_symbol': {s}", .{value});
+                                return e;
+                            };
+                        } else if (std.mem.eql(u8, "source_label", param_name)) {
+                            result.source_label = value;
+                        } else if (std.mem.eql(u8, "target_label", param_name)) {
+                            result.target_label = value;
+                        }
+                    },
+                    dif.GroupParams => {
+                        if (std.mem.eql(u8, "label", param_name)) {
+                            result.label = value;
+                        } else if (std.mem.eql(u8, "bgcolor", param_name)) {
+                            result.bgcolor = value;
+                        } else if (std.mem.eql(u8, "layout", param_name)) {
+                            result.layout = value;
+                        } else if (std.mem.eql(u8, "note", param_name)) {
+                            result.note = value;
+                        }
+                    },
+                    else => {
+                        @compileError("ERROR: Unsupported ParamsType " ++ ParamsType ++ ". Most likely a bug.\n");
+                    },
+                }
+            }
+        }
+
+        if (node.next_sibling) |*next| {
+            node_ref = next;
+        } else {
+            break;
+        }
+    }
 }
 
 
@@ -95,6 +169,7 @@ pub fn SemaContext() type {
 /// Returned SemaContext must be .deinit()'ed
 pub fn doSema(ctx: *SemaContext()) SemaError!void {
     try processNoDupesRecursively(ctx, &ctx.dif_root);
+    try processVerifyAndPopulateReferences(ctx, &ctx.dif_root);
 }
 
 fn isValidNodeField(field: []const u8) bool {
@@ -108,7 +183,7 @@ fn isValidEdgeField(field: []const u8) bool {
 }
 
 /// Verifies that all siblings' names passes the 'verificator'
-fn verifyFields(ctx: *SemaContext(), first_sibling: *ial.Entry(dif.DifNode), verificator: fn(field: []const u8) bool) !void {
+fn verifyFields(ctx: *SemaContext(), first_sibling: *ial.Entry(DifNode), verificator: fn(field: []const u8) bool) !void {
     var current_ref = first_sibling;
 
     // Iterate over sibling set
@@ -135,9 +210,84 @@ fn verifyFields(ctx: *SemaContext(), first_sibling: *ial.Entry(dif.DifNode), ver
     }
 }
 
+/// Traverses the dif-graph and populates the .data-field of each with e.g. cross-references and parameter-overrides
+fn processVerifyAndPopulateReferences(ctx: *SemaContext(), node: *ial.Entry(DifNode)) SemaError!void {
+    var current_ref = node;
+
+    while(true) {
+        const current = current_ref.get();
+
+        switch (current.node_type) {
+            .Node => {
+                var data = &current.data.Node;
+                if(current_ref.get().first_child) |*child| try getFieldsFromChildSet(ctx, dif.NodeParams, child, &data.params);
+            },
+            .Edge => {
+                var data = &current.data.Edge;
+                if(current_ref.get().first_child) |*child| try getFieldsFromChildSet(ctx, dif.EdgeParams, child, &data.params);
+            },
+            .Instantiation => {
+                // set data.node_type_ref
+                var data = &current.data.Instantiation;
+                if(current_ref.get().first_child) |*child| try getFieldsFromChildSet(ctx, dif.NodeParams, child, &data.params);
+
+                var node_type_name = current.data.Instantiation.target;
+                data.node_type_ref = ctx.node_map.get(node_type_name) orelse {
+                    ctx.printError(current_ref, "No node '{s}' found\n", .{node_type_name});
+                    return error.InvalidReference;
+                };
+            },
+            .Relationship => {
+                // set data.source_ref, data.edge_ref, data.target_ref
+                var data = &current.data.Relationship;
+                if(current_ref.get().first_child) |*child| try getFieldsFromChildSet(ctx, dif.EdgeParams, child, &data.params);
+
+                var node_name_source = current.name.?;
+                var edge_name = current.data.Relationship.edge;
+                var node_name_target = current.data.Relationship.target;
+
+                data.source_ref = ctx.instance_map.get(node_name_source) orelse ctx.group_map.get(node_name_source) orelse {
+                    ctx.printError(current_ref, "No instance or group '{s}' found\n", .{node_name_source});
+                    return error.InvalidReference;
+                };
+
+                data.target_ref = ctx.instance_map.get(node_name_target) orelse ctx.group_map.get(node_name_target) orelse {
+                    ctx.printError(current_ref, "No instance or group '{s}' found\n", .{node_name_target});
+                    return error.InvalidReference;
+                };
+
+                data.edge_ref = ctx.edge_map.get(edge_name) orelse {
+                    ctx.printError(current_ref, "No edge '{s}' found\n", .{edge_name});
+                    return error.InvalidReference;
+                };
+            },
+            .Group => {
+                var data = &current.data.Group;
+                if(current_ref.get().first_child) |*child| try getFieldsFromChildSet(ctx, dif.GroupParams, child, &data.params);
+            },
+            .Unit => {
+                var data = &current.data.Unit;
+                if(current_ref.get().first_child) |*child| try getFieldsFromChildSet(ctx, dif.GroupParams, child, &data.params);
+            },
+            else => {},
+        }
+
+
+        if (current.first_child) |*child| {
+            try processVerifyAndPopulateReferences(ctx, child);
+        }
+        
+        if (current.next_sibling) |*next| {
+            current_ref = next;
+        } else {
+            break;
+        }
+    }
+}
+
 /// Verify integrity of dif-graph. Fails on duplicate definitions and invalid fields.
 /// Aborts at first error.
-fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode)) SemaError!void {
+fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(DifNode)) SemaError!void {
     var current_ref = node;
 
     while(true) {
@@ -176,8 +326,8 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode))
             },
             .Instantiation => {
                 if(ctx.instance_map.get(node_name)) |*conflict_ref| {
-                    ctx.printError(current_ref, "Duplicate edge definition, '{s}' already defined.", .{node_name});
-                    ctx.printError(conflict_ref, "Previous definition was here.", .{});
+                    ctx.printError(current_ref, "Duplicate instantiation, '{s}' already defined.", .{node_name});
+                    ctx.printError(conflict_ref, "Previous instantiation was here.", .{});
                     return error.Duplicate;
                 } else if(ctx.group_map.get(node_name)) |*conflict_ref| {
                     ctx.printError(current_ref, "A group with name '{s}' already defined, can't create instance with same name.", .{node_name});
@@ -193,7 +343,7 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(dif.DifNode))
             },
             .Group => {
                 if(ctx.group_map.get(node_name)) |*conflict_ref| {
-                    ctx.printError(current_ref, "Duplicate edge definition, {s} already defined.", .{node_name});
+                    ctx.printError(current_ref, "Duplicate group definition, {s} already defined.", .{node_name});
                     ctx.printError(conflict_ref, "Previous definition was here.", .{});
                     return error.Duplicate;
                 } else if(ctx.instance_map.get(node_name)) |*conflict_ref| {
@@ -232,7 +382,7 @@ fn testSema(buf: []const u8) !void {
     const tokenizer = @import("tokenizer.zig");
 
     var tok = tokenizer.Tokenizer.init(buf);
-    var node_pool = ial.IndexedArrayList(dif.DifNode).init(std.testing.allocator);
+    var node_pool = ial.IndexedArrayList(DifNode).init(std.testing.allocator);
     defer node_pool.deinit();
 
     var root_node = try dif.tokensToDif(&node_pool, &tok, "test");
@@ -342,3 +492,6 @@ test "sema fails on invalid fields for relationship" {
         \\}
         ));
 }
+
+// TODO: Add tests to verify that invalid references fails
+// 

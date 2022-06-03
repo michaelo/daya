@@ -27,6 +27,36 @@ const DifNodeType = enum {
     Include,
 };
 
+
+/// To be populated with retrieved node-specific fields from a dif-node/tree
+pub const NodeParams = struct {
+    label: ?[]const u8 = null,
+    bgcolor: ?[]const u8 = null,
+    fgcolor: ?[]const u8 = null,
+    shape: ?[]const u8 = null,
+    note: ?[]const u8 = null,
+};
+
+/// To be populated with retrieved edge-specific fields from a dif-node/tree
+pub const EdgeParams = struct {
+    label: ?[]const u8 = null,
+    edge_style: ?EdgeStyle = null,
+    source_symbol: ?EdgeEndStyle = null,
+    source_label: ?[]const u8 = null,
+    target_symbol: ?EdgeEndStyle = null,
+    target_label: ?[]const u8 = null,
+};
+
+/// To be populated with retrieved group-specific fields from a dif-node/tree
+/// The top level diagram is also considered a group in this context.
+pub const GroupParams = struct {
+    label: ?[]const u8 = null,
+    layout: ?[]const u8 = null,
+    bgcolor: ?[]const u8 = null,
+    note: ?[]const u8 = null,
+};
+
+
 pub const DifNode = struct {
     const Self = @This();
 
@@ -41,13 +71,26 @@ pub const DifNode = struct {
     data: union(DifNodeType) {
         Unit: struct {
             src_buf: []const u8, // Reference to the source buffer, to e.g. look up surrounding code for error message etc.
+            params: GroupParams = .{},
         },
-        Edge: struct {},
-        Node: struct {},
-        Group: struct {},
+        Edge: struct {
+            params: EdgeParams = .{},
+        },
+        Node: struct {
+            params: NodeParams = .{},
+        },
+        Group: struct {
+            // TODO: possibly populate all supported field types. TBD: how to solve for top layer? Add same to Unit as well?
+            params: GroupParams = .{},
+        },
         Layer: struct {},
         Instantiation: struct {
-            target: []const u8,
+            target: []const u8, // TODO: rname to "node_type" or similar
+
+            // Populated during sema - might move to separate data structure later
+            node_type_ref: ?ial.Entry(DifNode) = null,
+            params: NodeParams = .{},
+            // TODO: add resolved variants of all supported node-properties as well?
         },
         Relationship: struct {
             edge: []const u8,
@@ -56,6 +99,14 @@ pub const DifNode = struct {
             // TBD: Can also implement a separate node structure with higher requirements of correctness - i.e. with minimal nulls, optionals and possibly already-resolved parameter lookups
             //      This way the DifNode-structure is a "work in progress", and once properly built we can tighten it up. This way we can also better optimize for self-rolled renderer.
             //      This new structure can also be nicely organized data-wise as we will have good control of the types of data as well as the total number of elements required for storage.
+
+            // Populated during sema - might move to separate data structure later
+            source_ref: ?ial.Entry(DifNode) = null,
+            edge_ref: ?ial.Entry(DifNode) = null,
+            target_ref: ?ial.Entry(DifNode) = null,
+
+            // TODO: add resolved variants of all supported edge-properties as well?
+            params: EdgeParams = .{},
         },
         Value: struct {
             value: []const u8,

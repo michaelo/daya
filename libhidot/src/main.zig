@@ -85,12 +85,7 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: W
 
     var dot_ctx = dot.DotContext(Writer).init(writer);
 
-    try dot.difToDot(Writer, &dot_ctx, &document_root, dot.DifNodeMapSet{
-        .node_map = &sema_ctx.node_map,
-        .edge_map = &sema_ctx.edge_map,
-        .instance_map = &sema_ctx.instance_map,
-        .group_map = &sema_ctx.group_map,
-    });
+    try dot.difToDot(Writer, &dot_ctx, &document_root);
 }
 
 test "hidotToDot w/ includes" {
