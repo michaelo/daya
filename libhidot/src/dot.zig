@@ -264,8 +264,8 @@ fn renderGeneration(comptime Writer: type, ctx: *DotContext(Writer), instance: *
                     try renderGeneration(Writer, ctx, child);
                     try ctx.print("}}\n", .{});
 
-                    // Checking group-fields in case of label, which shall be created outside of group
-                    var params_group = child.get().data.Group.params;
+                    // Checking group-fields in case of note, which shall be created outside of group
+                    var params_group = node.get().data.Group.params;
 
                     // Check for note:
                     if (params_group.note) |note| {
