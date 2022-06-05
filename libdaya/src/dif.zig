@@ -395,11 +395,11 @@ test "dif (parseTokensRecursively) parses include statement" {
         defer node_pool.deinit();
 
         var root_a = try bufToDif(&node_pool,
-            \\@myfile.hidot
+            \\@myfile.daya
         , "test");
 
         try testing.expectEqual(DifNodeType.Include, root_a.get().first_child.?.get().node_type);
-        try testing.expectEqualStrings("myfile.hidot", root_a.get().first_child.?.get().name.?);
+        try testing.expectEqualStrings("myfile.daya", root_a.get().first_child.?.get().name.?);
     }
 
     {
@@ -407,12 +407,12 @@ test "dif (parseTokensRecursively) parses include statement" {
         defer node_pool.deinit();
 
         var root_a = try bufToDif(&node_pool,
-            \\@myfile.hidot
+            \\@myfile.daya
             \\node Node;
         , "test");
 
         try testing.expectEqual(DifNodeType.Include, root_a.get().first_child.?.get().node_type);
-        try testing.expectEqualStrings("myfile.hidot", root_a.get().first_child.?.get().name.?);
+        try testing.expectEqualStrings("myfile.daya", root_a.get().first_child.?.get().name.?);
         try testing.expectEqual(DifNodeType.Node, root_a.get().first_child.?.get().next_sibling.?.get().node_type);
     }
 }

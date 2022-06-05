@@ -4,10 +4,10 @@ Exploration: language / syntax
 Need to determine which syntax the diagrams shall be authored with.
 I propose supporting two dialects:
 1) Common DOT
-2) "HiDot" - a higher level language which gets compiled to dot
+2) "Daya" - a higher level language which gets compiled to dot
 
 
-HiDot
+Daya
 -----
 Features:
 * Minimalistic, opinionated

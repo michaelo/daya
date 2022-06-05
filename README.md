@@ -1,33 +1,33 @@
-hidot: Rapid text-based graphing tool
+daya: Rapid text-based graphing tool
 ============================
 
 Example usage of compiler:
 
     // Generate a png
-    hidot myfile.hidot output.png
+    daya myfile.daya output.png
 
     // Generate an svg
-    hidot myfile.hidot output.svg
+    daya myfile.daya output.svg
 
     // Generate only the intermediary dot
-    hidot myfile.hidot output.dot
+    daya myfile.daya output.dot
 
-hidot is a tool and library to convert from the .hidot format to regular .dot, .png or .svg.
+daya is a tool and library to convert from the .daya format to regular .dot, .png or .svg.
 
-The hidot-format is intended to allow for rapid diagramming from text sources. Mostly relationship-like diagrams such as UML's activity- and component-diagrams etc. There are currently no plan to add features for sequence-diagrams and such.
+The daya-format is intended to allow for rapid diagramming from text sources. Mostly relationship-like diagrams such as UML's activity- and component-diagrams etc. There are currently no plan to add features for sequence-diagrams and such.
 
 It can be thought of as "a subset of dot with custom types" (*). "Type" here are, due to the visual nature of it all, more comparable to CSS classes than types from strictly typed programming languages: they provide templates for how different parts shall appear.
 
 The subset of features, attributes and such is highly opiniated, and very much subject to change as we move toward v1.0.
 
-(*): This is also to be read as; There are many, _many_ diagram-situations which are not intended to be solved by hidot.
+(*): This is also to be read as; There are many, _many_ diagram-situations which are not intended to be solved by daya.
 
 Getting started:
 ----------------
 
 Prerequisite: have graphviz (https://graphviz.org/download/) installed and dot available in path on your system.
 
-Create a .hidot file - e.g "gettingstarted.hidot":
+Create a .daya file - e.g "gettingstarted.daya":
 
     // Create one or more node types
     node User;
@@ -43,15 +43,15 @@ Create a .hidot file - e.g "gettingstarted.hidot":
     // Create relationships based on instances and edge types
     emperor controls deathstar;
 
-then run: ```hidot gettingstarted.hidot gettingstarted.png``` to create a diagram and save it as output.png for your viewing pleasures:
+then run: ```daya gettingstarted.daya gettingstarted.png``` to create a diagram and save it as output.png for your viewing pleasures:
 
-![Result of hidot to png compilation](examples/gettingstarted.png)
+![Result of daya to png compilation](examples/gettingstarted.png)
 
 
-Hidot advanced format example:
+Daya advanced format example:
 ---------------
 
-file: common_types.hidot:
+file: common_types.daya:
 
     // Define common node-types
     node Interface {
@@ -82,10 +82,10 @@ file: common_types.hidot:
         target_symbol=arrow_open;
     }
 
-file: mygraph.hidot
+file: mygraph.daya
 
     // imports the file as described above. Limitation: path can't contain newline
-    @common_types.hidot
+    @common_types.daya
 
     // Set title of diagram
     label="My example diagram";
@@ -122,9 +122,9 @@ file: mygraph.hidot
 
 Result:
 
-![Result of hidot to png compilation](examples/readme_example.hidot.png)
+![Result of daya to png compilation](examples/readme_example.daya.png)
 
-Hidot grammar
+Daya grammar
 -----------
 Types of statements:
 
@@ -190,7 +190,7 @@ Installation
 -----------
 See releases in repo, or Build-section below.
 
-To install a release, download the platform-appropriate archive, decompress it, and put the resident hidot-binary somewhere in your path.
+To install a release, download the platform-appropriate archive, decompress it, and put the resident daya-binary somewhere in your path.
 
 Build
 -----------
@@ -205,7 +205,7 @@ or (e.g.) for installation on Unix-like systems (from /compiler):
 
     $ zig build -Drelease-safe --prefix /usr/local
 
-Run tests for libhidot (from /libhidot):
+Run tests for libdaya (from /libdaya):
 
     $ zig build test
 
@@ -214,28 +214,28 @@ Components / inner workings
 -----------
 
 The system is split into the following components:
-* Compiler library (/libhidot) - the core compiler, can be linked into e.g compiler exe, web service, and possibly in the end as WASM to make the web frontend standalone.
+* Compiler library (/libdaya) - the core compiler, can be linked into e.g compiler exe, web service, and possibly in the end as WASM to make the web frontend standalone.
 * Compiler executable (/compiler)
 * Web service (not started)
 * Web frontend (not started)
 
 ### Compiler
 
-The main logic of the hidot-compiler is organized as a library located under /libhidot. Then there's a simple executable-wrapper located under /compiler.
+The main logic of the daya-compiler is organized as a library located under /libdaya. Then there's a simple executable-wrapper located under /compiler.
 
-#### libhidot
+#### libdaya
 
-The core component of it all. Provides functionaly to parse .hidot, validate the results, output valid .dot + eventually directly execute system-installed dot to generate a graphical representation of the diagram.
+The core component of it all. Provides functionaly to parse .daya, validate the results, output valid .dot + eventually directly execute system-installed dot to generate a graphical representation of the diagram.
 
 ### Service / backend
 
 Two parts:
-1. An endpoint which takes hidot and returns dot, PNG or SVG.
+1. An endpoint which takes daya and returns dot, PNG or SVG.
 1. Provider of the static frontend
 
 ### Frontend
 
-Minimal, single-page, input-form to provide hidot data and desired output-format (dot, png, svg).
+Minimal, single-page, input-form to provide daya data and desired output-format (dot, png, svg).
 
 
 ### Web component for easy inclusion into sites
@@ -260,15 +260,15 @@ TODO
 * Support multiple files as input (glob?) + a parameter to specify output-format, which will reuse the respective input-names with added extension for output
 * Design and implement scoping strategy
 * Support monitor/auto-build?
-* .hidot
+* .daya
     * TBD: Implement more advanced (composed) shapes? E.g. an UML-like class with sections?
     * Include-functionality:
       * Need to explore specific use cases to determine full functionality set here. Leaves as-is for now (in-place + common global scope).
       * Reconsider scoping to avoid unwanted collisions between subdiagrams + but still accommodate convenient definition-reuse.
     * Explicitly define behaviour wrt duplicate definitions; shall the latter be invalid behaviour, or shall they be fused? Either simply adding children, or explicitly checking for type and override values.
     * Simplify syntax: allow } as EOS. Don't require quotes around #-colors. Consider removing ; alltogether. Nl can serve the same purpose.
-* Finish v1 hidot-syntax: what is scope?
-    * Ensure compilator supports entire hidot-syntax
+* Finish v1 daya-syntax: what is scope?
+    * Ensure compilator supports entire daya-syntax
 * Lower importance:
     * Implement web service
     * Implement frontend
@@ -281,4 +281,4 @@ TODO
 
 Attributions
 ============
-* graphviz - hidot currently uses graphviz/dot as the low level graph tool
+* graphviz - daya currently uses graphviz/dot as the low level graph tool

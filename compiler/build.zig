@@ -11,11 +11,11 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("hidot", "src/main.zig");
+    const exe = b.addExecutable("daya", "src/main.zig");
 
     // TBD: This is cumbersome if there are knowledge in the lib's build.zig that we should reuse.
     //      Can we "chain" build.zig::build()s?
-    exe.addPackagePath("hidot", "../libhidot/src/main.zig");
+    exe.addPackagePath("daya", "../libdaya/src/main.zig");
     
     exe.setTarget(target);
     exe.setBuildMode(mode);
@@ -32,7 +32,7 @@ pub fn build(b: *std.build.Builder) void {
 
     var exe_tests = b.addTest("src/main.zig");
     exe_tests.setBuildMode(mode);
-    exe_tests.addPackagePath("hidot", "../libhidot/src/main.zig");
+    exe_tests.addPackagePath("daya", "../libdaya/src/main.zig");
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&exe_tests.step);

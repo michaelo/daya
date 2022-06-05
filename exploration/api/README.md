@@ -11,6 +11,6 @@ Auth:
 * 
 
 Persistent:
-* GET /diagram/:id.(png|svg|dot|hidot)  get diagram, in desired format
+* GET /diagram/:id.(png|svg|dot|daya)  get diagram, in desired format
 * PUT /diagram/:id  overwrite the diagram with new data to compile
 * DELETE /diagram/:id

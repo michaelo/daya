@@ -70,7 +70,7 @@ edge knows_about {
 
 // Units
 User: Actor;
-HidotFile: Data;
+DayaFile: Data;
 Cli: Interface;
 Tokenizer: Module;
 Dif: Module;
@@ -80,7 +80,7 @@ Dot: ExternalDependency;
 
 // Relationships
 User uses Cli;
-HidotFile is_owned_by User;
+DayaFile is_owned_by User;
 Cli depends_on Tokenizer;
 Cli depends_on Dif;
 Cli depends_on DotWriter;

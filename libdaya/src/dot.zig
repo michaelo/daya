@@ -331,7 +331,7 @@ test "writeNodeFields" {
         \\
     ;
 
-    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
+    try main.dayaToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
     try testing.expect(std.mem.indexOf(u8, buf_context.slice(), "\"Node\"") != null);
@@ -360,7 +360,7 @@ test "writeRelationshipFields" {
         \\
     ;
 
-    try main.hidotToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
+    try main.dayaToDot(std.testing.allocator, bufwriter.ArrayBufWriter, writer, source, "test");
     // Check that certain strings actually gets converted. It might not be 100% correct, but is intended to catch that
     // basic flow of logic is happening
     try testing.expect(std.mem.indexOf(u8, context.slice(), "Edge label") != null);

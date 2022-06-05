@@ -2,10 +2,10 @@ const std = @import("std");
 const builtin = @import("builtin");
 const debug = std.debug.print;
 
-const hidot = @import("hidot");
+const daya = @import("daya");
 const argparse = @import("argparse.zig");
 
-pub const APP_NAME = "hidot";
+pub const APP_NAME = "daya";
 pub const APP_VERSION = blk: {
     if (builtin.mode != .Debug) {
         break :blk @embedFile("../VERSION");
@@ -64,9 +64,9 @@ pub fn do(allocator: std.mem.Allocator, args: *argparse.AppArgs) errors!void {
     // v0.1.0:
     // Generate a .dot anyway: tmp.dot
     //   Att! This makes it not possible to run in parallal for now
-    const TEMPORARY_FILE = "__hidot_tmp.dot";
+    const TEMPORARY_FILE = "__daya_tmp.dot";
     
-    try hidotFileToDotFile(allocator, args.input_file, TEMPORARY_FILE);
+    try dayaFileToDotFile(allocator, args.input_file, TEMPORARY_FILE);
     defer std.fs.cwd().deleteFile(TEMPORARY_FILE) catch |e| {
         debug("ERROR: Could not delete temporary file '{s}' ({s})\n", .{TEMPORARY_FILE, @errorName(e)});
     };
@@ -89,13 +89,13 @@ pub fn do(allocator: std.mem.Allocator, args: *argparse.AppArgs) errors!void {
 }
 
 /// 
-pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []const u8, path_dot_output: []const u8) errors!void {
+pub fn dayaFileToDotFile(allocator: std.mem.Allocator, path_daya_input: []const u8, path_dot_output: []const u8) errors!void {
     // TODO: Set cwd to the folder of the file so any includes are handled relatively to file
-    var input_buffer = std.fs.cwd().readFileAlloc(allocator, path_hidot_input, 10*1024*1024) catch |e| switch(e) {
+    var input_buffer = std.fs.cwd().readFileAlloc(allocator, path_daya_input, 10*1024*1024) catch |e| switch(e) {
         error.FileTooBig => return errors.TooLargeInputFile,
         error.FileNotFound, error.AccessDenied => return errors.CouldNotReadInputFile,
         else => {
-            debug("ERROR: Got error '{s}' while reading input file '{s}'\n", .{@errorName(e), path_hidot_input});
+            debug("ERROR: Got error '{s}' while reading input file '{s}'\n", .{@errorName(e), path_daya_input});
             return errors.ProcessError;
         },
     };
@@ -110,7 +110,7 @@ pub fn hidotFileToDotFile(allocator: std.mem.Allocator, path_hidot_input: []cons
     };
     defer file.close();
     
-    hidot.hidotToDot(allocator, std.fs.File.Writer, file.writer(), input_buffer[0..], path_hidot_input) catch |e| {
+    daya.dayaToDot(allocator, std.fs.File.Writer, file.writer(), input_buffer[0..], path_daya_input) catch |e| {
         debug("ERROR: Got error '{s}' when compiling, see messages above\n", .{@errorName(e)});
         return errors.ProcessError;
     };
@@ -141,7 +141,7 @@ fn callDot(allocator: std.mem.Allocator, input_file: []const u8, output_file: []
 
     if(got_error) {
         debug("dot returned error: {s}\n", .{result.stderr});
-        debug("Generate .dot-file instead to debug generated data. This is most likely a bug in hidot.", .{});
+        debug("Generate .dot-file instead to debug generated data. This is most likely a bug in daya.", .{});
         return error.ProcessError;
     }
     

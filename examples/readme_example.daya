@@ -1,7 +1,7 @@
 // Actual content in this
 label="My example diagram";
 
-@readme_example_includes.hidot
+@readme_example_includes.daya
 
 // Declare the module-instances, optionally grouped
 IIterator: Interface {

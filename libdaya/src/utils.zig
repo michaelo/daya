@@ -2,10 +2,6 @@ const std = @import("std");
 const testing = std.testing;
 const bufwriter = @import("bufwriter.zig");
 
-pub fn initBoundedArray(comptime T: type, comptime S: usize) std.BoundedArray(T, S) {
-    return std.BoundedArray(T, S).init(0) catch unreachable;
-}
-
 // Takes 0-indexed idx into buffer, and returns the corresponding 1-indexed line and col of said character
 // Intended to be used in error-situations
 // Returns line and col=0 in in case of invalid input

@@ -245,7 +245,7 @@ test "tokenizer tokenizes keyword" {
 }
 
 test "tokenizer tokenizes import-statements" {
-    var buf = "@somefile.hidot";
+    var buf = "@somefile.daya";
     try expectTokens(buf, &[_]TokenType{.include});
 }
 

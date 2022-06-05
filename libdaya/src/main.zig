@@ -7,8 +7,6 @@ const dot = @import("dot.zig");
 const sema = @import("sema.zig");
 const ial = @import("indexedarraylist.zig");
 
-const initBoundedArray = @import("utils.zig").initBoundedArray;
-
 pub const LIB_VERSION = blk: {
     if (builtin.mode != .Debug) {
         break :blk @embedFile("../VERSION");
@@ -34,9 +32,11 @@ const Unit = struct {
     }
 };
 
-/// Converts hidot data to dot, written to passed writer. If includes are found, it will attempt to read those files.
+/// Converts daya data to dot, written to passed writer. If includes are found, it will attempt to read those files.
 /// Accepts a buf to allow simple entry-point to parse arbitrary strings and not requiring actual files.
-pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: Writer, buf: []const u8, entry_file: []const u8) !void {
+/// TODO: Assume cwd is set to direct parent of file included. Any other includes will then operate relative to this.
+//        TBD: Can possible resolve this maintaining concatinated paths throughout...
+pub fn dayaToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: Writer, buf: []const u8, entry_file: []const u8) !void {
     // The actual buffers and path-references
     var units = std.StringHashMap(Unit).init(allocator);
     defer units.deinit();
@@ -88,7 +88,7 @@ pub fn hidotToDot(allocator: std.mem.Allocator, comptime Writer: type, writer: W
     try dot.difToDot(Writer, &dot_ctx, &document_root);
 }
 
-test "hidotToDot w/ includes" {
+test "dayaToDot w/ includes" {
     const bufwriter = @import("bufwriter.zig");
     var out_buf: [1024]u8 = undefined;
     var out_buf_context = bufwriter.ArrayBuf{ .buf = out_buf[0..] };
@@ -96,26 +96,26 @@ test "hidotToDot w/ includes" {
 
     // TODO: Revert cwd
     try (try std.fs.cwd().openDir("testfiles", .{})).setAsCwd();
-    var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "include.hidot", 5 * 1024 * 1024);
+    var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "include.daya", 5 * 1024 * 1024);
     defer std.testing.allocator.free(file_buf);
 
-    try hidotToDot(std.testing.allocator, @TypeOf(writer), writer, file_buf, "include.hidot");
+    try dayaToDot(std.testing.allocator, @TypeOf(writer), writer, file_buf, "include.daya");
     try testing.expect(out_buf_context.slice().len > 0);
     // std.debug.print("Contents: {s}\n", .{out_buf_context.slice()});
 }
 
 
-test "hidotToDot w/ nested includes" {
+test "dayaToDot w/ nested includes" {
     const bufwriter = @import("bufwriter.zig");
     var out_buf: [1024]u8 = undefined;
     var out_buf_context = bufwriter.ArrayBuf{ .buf = out_buf[0..] };
     var writer = out_buf_context.writer();
 
     try (try std.fs.cwd().openDir("multiinclude", .{})).setAsCwd();
-    var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "main.hidot", 5 * 1024 * 1024);
+    var file_buf = try std.fs.cwd().readFileAlloc(std.testing.allocator, "main.daya", 5 * 1024 * 1024);
     defer std.testing.allocator.free(file_buf);
 
-    try hidotToDot(std.testing.allocator, @TypeOf(writer), writer, file_buf, "main.hidot");
+    try dayaToDot(std.testing.allocator, @TypeOf(writer), writer, file_buf, "main.daya");
     try testing.expect(out_buf_context.slice().len > 0);
 }
 

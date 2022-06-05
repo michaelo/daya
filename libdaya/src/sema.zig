@@ -377,7 +377,7 @@ fn processNoDupesRecursively(ctx: *SemaContext(), node: *ial.Entry(DifNode)) Sem
 
 // Yes, these tests are integration-y
 // Might at some point rewrite them to use internal dif-format, but I find it more 
-// likely that the dif will change (and the work connected to it) than the hidot-syntax.
+// likely that the dif will change (and the work connected to it) than the daya-syntax.
 fn testSema(buf: []const u8) !void {
     const tokenizer = @import("tokenizer.zig");
 
@@ -440,7 +440,7 @@ test "sema fails on instance with same name as group" {
         ));
 }
 
-test "sema does not fail on well-formed hidot" {
+test "sema does not fail on well-formed daya" {
     try testing.expectEqual({}, try testSema(
         \\node Component;
         \\node Library;

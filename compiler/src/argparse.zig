@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
-const hidot = @import("hidot");
 const debug = std.debug.print;
+const daya = @import("daya");
 const main = @import("main.zig");
 
 pub const OutputFormat = enum {
@@ -20,7 +20,7 @@ pub fn printHelp(full: bool) void {
     debug(
         \\{0s} v{1s} - Quick graphing utility
         \\
-        \\Usage: {0s} [arguments] input.hidot output.png
+        \\Usage: {0s} [arguments] input.daya output.png
         \\
     , .{ main.APP_NAME, main.APP_VERSION});
 
@@ -36,16 +36,16 @@ pub fn printHelp(full: bool) void {
     debug(
         \\
         \\Examples:
-        \\  {0s} myapp.hidot mynicediagram.png
-        \\  {0s} myapp.hidot mynicediagram.svg
-        \\  {0s} myapp.hidot mynicediagram.dot
+        \\  {0s} myapp.daya mynicediagram.png
+        \\  {0s} myapp.daya mynicediagram.svg
+        \\  {0s} myapp.daya mynicediagram.dot
         \\
         \\Arguments
         \\  -h, --help          Show this help and exit
         \\      --version       Show version and exit
-        \\  -v, --verbose       Verbose output
+        // \\  -v, --verbose       Verbose output
         \\
-        \\https://github.com/michaelo/hidot
+        \\https://github.com/michaelo/daya
         \\
         , .{main.APP_NAME});
 }
@@ -90,7 +90,7 @@ pub fn parseArgs(args: []const []const u8) !AppArgs {
         }
 
         if(argIs(arg, "--version", null)) {
-            debug("{0s} v{1s} (libhidot v{2s})\n", .{main.APP_NAME, main.APP_VERSION, hidot.LIB_VERSION});
+            debug("{0s} v{1s} (libdaya v{2s})\n", .{main.APP_NAME, main.APP_VERSION, daya.LIB_VERSION});
             return error.OkExit;
         }
 
@@ -107,7 +107,7 @@ pub fn parseArgs(args: []const []const u8) !AppArgs {
             continue;
         };
 
-        if(std.mem.eql(u8, ext, "hidot")) {
+        if(std.mem.eql(u8, ext, "daya")) {
             maybe_input_file = arg[0..];
             continue;
         }
